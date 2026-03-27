@@ -1,0 +1,8 @@
+# created by virtualenv automatically
+.env.py
+/pyvenv.cfg
+/requirements.txt
+/lib64/
+/lib/
+/include/
+/bin/

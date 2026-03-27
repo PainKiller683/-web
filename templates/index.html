@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <!-- Боковая панель: Форма добавления -->
+    <div class="col-md-4 mb-4">
+        <div class="card p-4 shadow-sm">
+            <h4 class="mb-3">Куда едем?</h4>
+            <form action="/add_trip" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="form-label">Город назначения</label>
+                    <input type="text" name="city" class="form-control" placeholder="Напр: Сочи" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Билет или бронь (PDF/JPG)</label>
+                    <input type="file" name="ticket" class="form-control">
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Добавить в план</button>
+            </form>
+            <hr>
+            <a href="/export" class="btn btn-outline-secondary w-100">📥 Скачать список (CSV)</a>
+        </div>
+    </div>
+
+    <!-- Основная панель: Поиск и Список -->
+    <div class="col-md-8">
+        <div class="mb-4">
+            <input type="text" id="citySearch" class="form-control form-control-lg shadow-sm" 
+                   placeholder="🔍 Быстрый поиск по городам...">
+        </div>
+        
+        <div id="tripsContainer" class="row">
+            <!-- Сюда JS подставит карточки -->
+        </div>
+    </div>
+</div>
+
+<script>
+    const searchInput = document.getElementById('citySearch');
+    const container = document.getElementById('tripsContainer');
+
+    const updateTrips = async () => {
+        const query = searchInput.value;
+        const response = await fetch(`/api/my_trips?q=${query}`);
+        const trips = await response.json();
+        
+        container.innerHTML = trips.map(t => `
+            <div class="col-md-6 mb-3">
+                <div class="card h-100 p-3 border-start border-primary border-4 shadow-sm">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 text-dark">${t.city}</h5>
+                        ${t.file ? `<a href="/static/uploads/${t.file}" class="btn btn-sm btn-light" target="_blank">📄 Билет</a>` : '<span class="badge bg-light text-muted">Нет файла</span>'}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        if (trips.length === 0) {
+            container.innerHTML = '<div class="text-center mt-5 text-muted"><h5>Поездок не найдено 💨</h5></div>';
+        }
+    };
+
+    searchInput.addEventListener('input', updateTrips);
+    window.onload = updateTrips; // Загрузить всё при старте
+</script>
+{% endblock %}
