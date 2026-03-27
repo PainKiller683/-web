@@ -20,7 +20,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 
-# --- ORM МОДЕЛИ ---
+# ORM МОДЕЛИ
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -40,7 +40,7 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# --- РОУТЫ (ЛОГИКА) ---
+#РОУТЫ (ЛОГИКА)
 
 @app.route('/')
 @login_required
@@ -91,7 +91,7 @@ def add_trip():
     return redirect(url_for('index'))
 
 
-# --- API И ЭКСПОРТ ---
+# API И ЭКСПОРТ
 
 @app.route('/api/my_trips')
 @login_required
