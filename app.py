@@ -103,15 +103,57 @@ def api_trips():
 
 @app.route('/export')
 @login_required
-def export():
+def export_csv():
+    # 1. Получаем данные из БД через ORM
     trips = Trip.query.filter_by(user_id=current_user.id).all()
+
+    # 2. Создаем "виртуальный" файл в оперативной памяти
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['City', 'File'])
-    for t in trips: writer.writerow([t.city, t.ticket_file])
+
+    # Записываем заголовки (utf-8-sig нужен для корректного открытия в Excel)
+    writer.writerow(['ID Поездки', 'Город', 'Файл билета'])
+
+    # Записываем строки данных
+    for trip in trips:
+        writer.writerow([trip.id, trip.city, trip.ticket_file or "Нет файла"])
+
+    # 3. Подготавливаем ответ для браузера
     output.seek(0)
-    return send_file(io.BytesIO(output.getvalue().encode()), mimetype='text/csv', as_attachment=True,
-                     download_name='trips.csv')
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8-sig')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='my_trips.csv'
+    )
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+
+@app.route('/api/v1/trips', methods=['GET'])
+@login_required  # Доступ только для авторизованных
+def get_my_trips_json():
+    # 1. Берем данные из БД через ORM
+    user_trips = Trip.query.filter_by(user_id=current_user.id).all()
+
+    # 2. Формируем список словарей (то, что станет JSON)
+    trips_list = []
+    for trip in user_trips:
+        trips_list.append({
+            "id": trip.id,
+            "city": trip.city,
+            "file_url": url_for('static', filename='uploads/' + trip.ticket_file) if trip.ticket_file else None,
+            "user": current_user.username
+        })
+
+    # 3. Возвращаем JSON и статус 200 (OK)
+    return jsonify({
+        "status": "success",
+        "count": len(trips_list),
+        "data": trips_list
+    }), 200
 
 
 if __name__ == '__main__':
