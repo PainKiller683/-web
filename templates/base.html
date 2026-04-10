@@ -2,37 +2,26 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TravelDash 2026</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net" rel="stylesheet">
+    <title>TravelDash Pro</title>
+    <link href="https://yastatic.net" rel="stylesheet">
     <style>
-        body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .navbar { margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .card { border: none; border-radius: 12px; transition: 0.3s; }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        body { background: #f0f2f5; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-dark bg-dark mb-4 shadow">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="/">📍 TravelDash</a>
-            <div class="navbar-nav ms-auto">
+            <a class="navbar-brand fw-bold" href="/">✈️ TRAVEL DASH</a>
+            <div class="navbar-nav flex-row ms-auto align-items-center">
                 {% if current_user.is_authenticated %}
-                    <span class="nav-link text-white me-3">Привет, <strong>{{ current_user.username }}</strong></span>
-                    <a class="btn btn-outline-light btn-sm mt-1" href="/logout">Выйти</a>
-                {% else %}
-                    <a class="nav-link" href="/login">Вход</a>
-                    <a class="nav-link" href="/register">Регистрация</a>
+                    <a class="nav-link me-3" href="/export">CSV Отчет</a>
+                    <img src="/static/avatars/{{ current_user.avatar }}" width="35" height="35" class="rounded-circle me-3 border">
+                    <a class="btn btn-outline-danger btn-sm" href="/logout">Выйти</a>
                 {% endif %}
             </div>
         </div>
     </nav>
-
-    <div class="container">
-        {% block content %}{% endblock %}
-    </div>
-
-    <script src="https://cdn.jsdelivr.net"></script>
+    <div class="container">{% block content %}{% endblock %}</div>
 </body>
 </html>
