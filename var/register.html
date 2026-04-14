@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="col-md-5 mx-auto card p-4 shadow">
+    <h3 class="text-center mb-4">Регистрация профиля</h3>
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label class="form-label">Логин</label>
+            <input type="text" name="username" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Пароль</label>
+            <input type="password" name="password" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">О себе (Bio)</label>
+            <textarea name="bio" class="form-control" rows="3" placeholder="Расскажите о своих путешествиях..."></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Фото профиля (Avatar)</label>
+            <input type="file" name="avatar" class="form-control" accept="image/*">
+        </div>
+        <button type="submit" class="btn btn-success w-100">Создать аккаунт</button>
+    </form>
+</div>
+{% endblock %}

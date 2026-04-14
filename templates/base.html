@@ -2,22 +2,17 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>TravelDash Pro</title>
     <link href="https://yastatic.net" rel="stylesheet">
-    <style>
-        body { background: #f0f2f5; }
-        .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    </style>
+    <style>body{background:#f4f7f6}.navbar{margin-bottom:2rem}.card{border:none;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05)}</style>
 </head>
 <body>
-    <nav class="navbar navbar-dark bg-dark mb-4 shadow">
+    <nav class="navbar navbar-dark bg-primary shadow">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="/">✈️ TRAVEL DASH</a>
-            <div class="navbar-nav flex-row ms-auto align-items-center">
+            <a class="navbar-brand fw-bold" href="/">📍 TravelDash 2026</a>
+            <div class="navbar-nav ms-auto flex-row align-items-center">
                 {% if current_user.is_authenticated %}
-                    <a class="nav-link me-3" href="/export">CSV Отчет</a>
-                    <img src="/static/avatars/{{ current_user.avatar }}" width="35" height="35" class="rounded-circle me-3 border">
-                    <a class="btn btn-outline-danger btn-sm" href="/logout">Выйти</a>
+                <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}" class="rounded-circle me-2" width="30" height="30" style="object-fit:cover">
+                <a class="btn btn-sm btn-light" href="/logout">Выйти</a>
                 {% endif %}
             </div>
         </div>
