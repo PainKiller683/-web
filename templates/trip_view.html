@@ -1,37 +1,120 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row">
+<link rel="stylesheet" href="https://yastatic.net">
+
+<div class="row g-4">
     <div class="col-md-8">
-        <div class="card p-4 mb-4">
-            <h2>Маршрут: {{ trip.city_from }} → {{ trip.city_to }}</h2>
-            <div id="map" style="width:100%;height:400px;border-radius:10px" class="mt-3"></div>
-            <div class="mt-4 p-3 bg-light rounded d-flex justify-content-between">
-                <span>Билеты из <b>{{ trip.city_from }}</b>:</span>
-                <a href="https://yandex.ru{{ trip.city_from }}&toName={{ trip.city_to }}" target="_blank" class="btn btn-sm btn-dark">Яндекс.Расписания</a>
+        <div class="card border-0 shadow-sm mb-4" style="border-radius: 20px; overflow: hidden;">
+            <div class="card-body p-0">
+                <div id="map" style="width:100%;height:450px;"></div>
+            </div>
+            <div class="card-footer bg-white p-4 border-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="fw-bold mb-0">{{ trip.city_from }} <i class="bi bi-arrow-right text-primary mx-2"></i> {{ trip.city_to }}</h3>
+                    <a href="https://yandex.ru{{ trip.city_from }}&toName={{ trip.city_to }}" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill">Смотреть все рейсы</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm" style="border-radius: 20px;">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-4"><i class="bi bi-clock-history me-2 text-primary"></i>Ближайшие рейсы (Яндекс.Расписания)</h5>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Транспорт</th>
+                                <th>Маршрут</th>
+                                <th>Время</th>
+                                <th class="text-end">В пути</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in segments %}
+                            <tr>
+                                <td>
+                                    {% if s.thread.transport_type == 'plane' %}<i class="bi bi-airplane"></i>
+                                    {% elif s.thread.transport_type == 'train' %}<i class="bi bi-train-front"></i>
+                                    {% else %}<i class="bi bi-bus-front"></i>{% endif %}
+                                    <span class="small ms-1 text-uppercase text-muted">{{ s.thread.transport_type }}</span>
+                                </td>
+                                <td><span class="fw-semibold">{{ s.thread.title }}</span></td>
+                                <td>
+                                    <div class="small">Отпр: {{ s.departure[11:16] }}</div>
+                                    <div class="small text-muted">Приб: {{ s.arrival[11:16] }}</div>
+                                </td>
+                                <td class="text-end fw-bold text-primary">{{ (s.duration / 3600) | round(1) }} ч.</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">Прямых рейсов на сегодня не найдено</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
+
     <div class="col-md-4">
-        <div class="card p-3 bg-info text-white mb-3 shadow">
-            <h6 class="mb-0">Погода в {{ trip.city_to }}</h6>
-            <h2 class="fw-bold">{{ weather.temp }}</h2>
-            <small>{{ weather.condition }}</small>
+        <div class="card border-0 shadow-sm mb-4 text-white" style="border-radius: 20px; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase opacity-75 small fw-bold">Погода в точке прибытия</h6>
+                        <h1 class="display-4 fw-bold mb-0">{{ weather.temp }}</h1>
+                        <p class="text-capitalize mb-0">{{ weather.condition }}</p>
+                    </div>
+                    <div class="text-center">
+                        <img src="https://yastatic.net{{ weather.icon }}.svg" alt="weather" style="width: 80px;">
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card p-4 bg-dark text-white">
-            <h4 class="text-warning">Бюджет: {{ trip.budget_limit }} ₽</h4>
-            <div class="alert alert-secondary py-2 text-center"><b>{{ daily }} ₽ / день</b></div>
-            <hr>
-            <p class="small">🏨 <b>Где жить:</b> {{ hotels }}</p>
-            <p class="small">🏛️ <b>Что делать:</b> {{ acts }}</p>
+
+        <div class="card border-0 shadow-sm bg-dark text-white" style="border-radius: 20px;">
+            <div class="card-body p-4">
+                <h6 class="text-uppercase text-warning small fw-bold mb-3">Ваш план расходов</h6>
+                <h2 class="fw-bold mb-1">{{ trip.budget_limit }} ₽</h2>
+                <div class="badge bg-secondary mb-4">{{ daily }} ₽ / в день</div>
+
+                <hr class="opacity-25">
+
+                <div class="mb-3">
+                    <label class="text-muted small d-block mb-1">РЕКОМЕНДУЕМОЕ ЖИЛЬЕ</label>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-house-door me-2 text-info"></i>
+                        <span class="fw-bold">{{ hotels }}</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-muted small d-block mb-1">ЧЕМ ЗАНЯТЬСЯ</label>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-geo-alt me-2 text-danger"></i>
+                        <span class="fw-bold">{{ acts }}</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-warning w-100 mt-4 rounded-pill fw-bold py-2 shadow-sm">Забронировать тур</button>
+            </div>
         </div>
     </div>
 </div>
-<!-- ВСТАВИТЬ КЛЮЧ ЯНДЕКС КАРТ НИЖЕ -->
-<script src="demo_yandex_weather_api_key_ca6d09349ba0" type="text/javascript"></script>
+
+<script src="https://yandex.ru{{ maps_key }}&lang=ru_RU" type="text/javascript"></script>
 <script>
     ymaps.ready(() => {
-        let m = new ymaps.Map("map", {center: [55.7, 37.6], zoom: 7});
-        let r = new ymaps.multiRouter.MultiRoute({referencePoints: ["{{ trip.city_from }}", "{{ trip.city_to }}"]}, {boundsAutoApply: true});
+        let m = new ymaps.Map("map", {center: [55.7, 37.6], zoom: 5, controls: ['zoomControl']});
+        let r = new ymaps.multiRouter.MultiRoute({
+            referencePoints: ["{{ trip.city_from }}", "{{ trip.city_to }}"]
+        }, {
+            boundsAutoApply: true,
+            routeActiveStrokeWidth: 5,
+            routeActiveStrokeColor: "#2575fc"
+        });
         m.geoObjects.add(r);
     });
 </script>

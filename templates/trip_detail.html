@@ -1,56 +1,113 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row">
-    <div class="col-md-7">
-        <div class="card p-4 mb-4">
-            <h3 class="mb-4">📍 Поездка в {{ trip.city }}</h3>
-            <div id="map" class="rounded mb-4 shadow-sm" style="height: 350px;"></div>
+<!-- Иконки и шрифты -->
+<link rel="stylesheet" href="https://jsdelivr.net">
 
-            <h5>План (Waypoints)</h5>
-            <form action="/trip/{{ trip.id }}/action" method="POST" class="d-flex mb-3">
+<div class="row g-4">
+    <div class="col-md-7">
+        <div class="card p-4 shadow-sm border-0" style="border-radius: 15px;">
+            <h3 class="mb-4 fw-bold text-dark">📍 Поездка в {{ trip.city_to }}</h3>
+
+            <!-- Карта -->
+            <div id="map" class="rounded mb-4 shadow-sm" style="height: 350px; border: 1px solid #eee;"></div>
+
+            <!-- Блок Яндекс Расписаний -->
+            <h5 class="fw-bold mb-3"><i class="bi bi-train-front text-primary me-2"></i>Ближайшие рейсы</h5>
+            <div class="list-group list-group-flush mb-4 small">
+                {% for s in segments %}
+                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <div>
+                        <span class="badge bg-light text-dark border me-1">{{ s.thread.transport_type[:1] | upper }}</span>
+                        <strong>{{ s.thread.title }}</strong>
+                        <div class="text-muted" style="font-size: 0.75rem;">Отпр: {{ s.departure[11:16] }}</div>
+                    </div>
+                    <div class="text-end">
+                        <span class="text-primary fw-bold">{{ (s.duration / 3600) | round(1) }} ч.</span>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted small">Рейсы не найдены. Проверьте город отправления.</p>
+                {% endfor %}
+            </div>
+
+            <!-- План посещений -->
+            <h5 class="fw-bold">🗺️ План (Waypoints)</h5>
+            <form action="/trip/{{ trip.id }}/action" method="POST" class="d-flex mb-3 mt-2">
                 <input type="hidden" name="type" value="waypoint">
-                <input type="text" name="place" class="form-control me-2" placeholder="Место посещения" required>
-                <button class="btn btn-primary">Добавить</button>
+                <input type="text" name="place" class="form-control form-control-sm me-2" placeholder="Напр: Эйфелева башня" required>
+                <button class="btn btn-sm btn-primary px-3">Добавить</button>
             </form>
-            <ul class="list-group list-group-flush">
-                {% for w in trip.waypoints %}<li class="list-group-item">{{ w.place_name }}</li>{% endfor %}
+            <ul class="list-group list-group-flush border-top">
+                {% for w in trip.waypoints %}
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-geo text-secondary me-2"></i>{{ w.place_name }}</span>
+                </li>
+                {% endfor %}
             </ul>
         </div>
     </div>
+
     <div class="col-md-5">
-        <div class="card p-4 mb-4 border-start border-4 border-success">
-            <h5>💰 Бюджет и Траты</h5>
-            <div class="d-flex justify-content-between small mb-1">
+        <!-- Виджет Погоды (НОВЫЙ) -->
+        <div class="card p-3 mb-4 text-white border-0 shadow-sm" style="background: linear-gradient(135deg, #00b4db, #0083b0); border-radius: 15px;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="opacity-75">Погода по прибытии</small>
+                    <h2 class="fw-bold mb-0">{{ weather.temp }}</h2>
+                    <small class="text-capitalize">{{ weather.condition }}</small>
+                </div>
+                <img src="https://yastatic.net{{ weather.icon }}.svg" style="width: 60px;">
+            </div>
+        </div>
+
+        <!-- Бюджет и Траты -->
+        <div class="card p-4 mb-4 border-0 shadow-sm border-start border-4 border-success" style="border-radius: 15px;">
+            <h5 class="fw-bold">💰 Бюджет и Траты</h5>
+            <div class="d-flex justify-content-between small mb-1 mt-3">
                 <span>{{ spent }} ₽ потрачено</span><span>Лимит: {{ trip.budget_limit }} ₽</span>
             </div>
-            <div class="progress mb-3" style="height: 12px;">
+            <div class="progress mb-3" style="height: 8px; border-radius: 10px;">
                 <div class="progress-bar {% if prog > 90 %}bg-danger{% else %}bg-success{% endif %}" style="width: {{ prog }}%"></div>
             </div>
             <p class="small {% if rem < 0 %}text-danger fw-bold{% endif %}">Остаток: {{ rem }} ₽</p>
-            <hr>
+            <hr class="opacity-25">
             <form action="/trip/{{ trip.id }}/action" method="POST" class="small">
                 <input type="hidden" name="type" value="expense">
                 <div class="row g-2">
-                    <div class="col-6"><input type="number" name="amount" class="form-control" placeholder="Сумма" required></div>
-                    <div class="col-6"><select name="cat" class="form-select"><option>Еда</option><option>Транспорт</option><option>Отель</option></select></div>
-                    <div class="col-12 mt-2"><input type="text" name="desc" class="form-control" placeholder="Описание (напр: Обед)"></div>
+                    <div class="col-6"><input type="number" name="amount" class="form-control form-control-sm" placeholder="Сумма" required></div>
+                    <div class="col-6">
+                        <select name="cat" class="form-select form-select-sm">
+                            <option>Еда</option><option>Транспорт</option><option>Отель</option>
+                        </select>
+                    </div>
+                    <div class="col-12"><input type="text" name="desc" class="form-control form-control-sm" placeholder="Описание"></div>
                 </div>
-                <button class="btn btn-sm btn-dark w-100 mt-3">Добавить расход</button>
+                <button class="btn btn-sm btn-dark w-100 mt-3 rounded-pill">Добавить расход</button>
             </form>
         </div>
-        <div class="card p-3 shadow-sm bg-white">
-            <h6 class="text-muted">Билеты:</h6>
-            {% if trip.ticket_file %}<a href="/static/uploads/{{ trip.ticket_file }}" target="_blank" class="btn btn-sm btn-outline-info w-100">Открыть файл</a>
-            {% else %}<span class="badge bg-light text-dark">Файл не прикреплен</span>{% endif %}
-            <a href="/" class="btn btn-link w-100 mt-2 text-secondary small">← Назад</a>
+
+        <!-- Билеты -->
+        <div class="card p-4 shadow-sm border-0" style="border-radius: 15px;">
+            <h6 class="fw-bold mb-3"><i class="bi bi-ticket-perforated me-2"></i>Документы:</h6>
+            {% if trip.ticket_file %}
+            <a href="/static/uploads/{{ trip.ticket_file }}" target="_blank" class="btn btn-sm btn-outline-info w-100 rounded-pill">Открыть билет</a>
+            {% else %}
+            <div class="p-2 bg-light rounded text-center small text-muted">Билеты не загружены</div>
+            {% endif %}
+            <a href="/" class="btn btn-link btn-sm w-100 mt-2 text-secondary">← На главную</a>
         </div>
     </div>
 </div>
-<script src="https://yandex.ru"></script>
+
+<!-- API Яндекс.Карт -->
+<script src="https://yandex.ru{{ maps_key }}&lang=ru_RU"></script>
 <script>
     ymaps.ready(() => {
-        let m = new ymaps.Map("map", {center: [55.7, 37.6], zoom: 6, controls: ['routePanelControl']});
-        m.controls.get('routePanelControl').routePanel.state.set({from: "Москва", to: "{{ trip.city }}"});
+        let m = new ymaps.Map("map", {center: [55.7, 37.6], zoom: 6, controls: ['zoomControl']});
+        let r = new ymaps.multiRouter.MultiRoute({
+            referencePoints: ["{{ trip.city_from }}", "{{ trip.city_to }}"]
+        }, { boundsAutoApply: true });
+        m.geoObjects.add(r);
     });
 </script>
 {% endblock %}

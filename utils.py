@@ -5,10 +5,6 @@ from datetime import datetime
 
 
 def save_avatar(file, folder):
-    """
-    Процессинг аватара: генерация имени, обрезка и сжатие.
-    Функция гарантирует, что все аватары будут квадратными и небольшого веса.
-    """
     if not file or file.filename == '':
         return 'default.png'
 
