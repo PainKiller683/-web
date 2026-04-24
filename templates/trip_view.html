@@ -2,7 +2,7 @@
 {% block content %}
 <!-- Иконки Bootstrap -->
 <link rel="stylesheet" href="https://yastatic.net">
-
+<!-- <script src="https://api.rasp.yandex.ru/v1/?apikey=13bbc4a8-f7c8-418e-bd4c-40b72b78c48f&lang=ru_RU" type="text/javascript"> </script> -->
 <style>
     body { background: #f6f6f6; font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; }
     .ya-box { background: #fff; border-radius: 20px; border: 1px solid #eee; padding: 25px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
@@ -35,7 +35,7 @@
                             <div class="fw-bold text-dark">{{ s.thread.title }}</div>
                             <small class="text-muted">{{ s.departure[11:16] }} • {{ s.thread.transport_type_title }}</small>
                         </div>
-                        <a href="https://t.rasp.yandex.ru" target="_blank" class="btn btn-ya btn-sm">Билеты</a>
+                        <a href="https://api.rasp.yandex.ru/v1" target="_blank" class="btn btn-ya btn-sm">Билеты</a>
                     </div>
                     {% else %}
                     <p class="text-muted small py-2">Прямых рейсов не найдено. Попробуйте изменить дату или города.</p>
