@@ -1,37 +1,59 @@
 {% extends "base.html" %}
 {% block content %}
+<link rel="stylesheet" href="https://yastatic.net">
+<style>
+    body { background: #f6f6f6; font-family: sans-serif; }
+    .ya-card { background: #fff; border-radius: 16px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .btn-ya { background: #fc0; border: none; color: #000; border-radius: 10px; font-weight: 500; }
+</style>
+
 <div class="row mb-4">
-    <div class="col-12 card p-3 d-flex flex-row align-items-center">
-        <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}" class="rounded-circle me-4 shadow" width="100" height="100" style="object-fit:cover">
-        <div><h3>{{ current_user.username }}</h3><p class="text-muted mb-0">{{ current_user.bio }}</p></div>
+    <div class="col-12 ya-card p-3 d-flex align-items-center">
+        <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}"
+             class="rounded-circle me-3 shadow-sm" width="80" height="80" style="object-fit:cover">
+        <div><h3 class="mb-0">{{ current_user.username }}</h3>
+            <p class="text-muted mb-0 small">{{ current_user.bio }}</p></div>
     </div>
 </div>
+
 <div class="row">
     <div class="col-md-4">
-        <div class="card p-4 mb-3">
-            <h5>Новый план</h5>
+        <div class="ya-card p-4 mb-3">
+            <h5 class="fw-bold mb-3">Новый план</h5>
             <form action="/add_trip" method="POST">
                 <input type="text" name="city_from" class="form-control mb-2" placeholder="Откуда" required>
                 <input type="text" name="city_to" class="form-control mb-2" placeholder="Куда" required>
-                <input type="number" name="budget_limit" class="form-control mb-2" placeholder="Бюджет">
+                <input type="number" name="budget_limit" class="form-control mb-2" placeholder="Бюджет, ₽">
                 <input type="number" name="days_count" class="form-control mb-3" placeholder="Дней">
-                <button class="btn btn-primary w-100">Добавить</button>
+                <button class="btn btn-ya w-100 py-2">Создать маршрут</button>
             </form>
-        </div>
-        <div class="card p-3 shadow-sm border-dashed">
-            <h6 class="small fw-bold">Импорт / Экспорт CSV</h6>
-            <form action="/import" method="POST" enctype="multipart/form-data" class="mb-2">
-                <input type="file" name="file" class="form-control form-control-sm mb-2" required>
-                <button class="btn btn-sm btn-outline-primary w-100">Загрузить CSV</button>
-            </form>
-            <a href="/export" class="btn btn-sm btn-outline-success w-100">Скачать CSV</a>
+            <div class="ya-card p-3 mt-3 shadow-sm border-dashed" style="border: 2px dashed #ddd; background: #fafafa;">
+                <h6 class="small fw-bold text-uppercase text-muted mb-3"><i class="bi bi-file-earmark-arrow-up"></i>
+                    Работа с данными</h6>
+
+                <!-- Кнопка ИМПОРТА -->
+                <form action="/import" method="POST" enctype="multipart/form-data" class="mb-3">
+                    <label for="csvFile" class="small text-muted mb-1">Загрузить из CSV:</label>
+                    <div class="input-group">
+                        <input type="file" name="file" id="csvFile" class="form-control form-control-sm" required>
+                        <button class="btn btn-sm btn-outline-primary">OK</button>
+                    </div>
+                </form>
+
+                <!-- Кнопка ЭКСПОРТА -->
+                <a href="/export" class="btn btn-sm btn-outline-success w-100 py-2">
+                    <i class="bi bi-download"></i> Скачать мои планы (CSV)
+                </a>
+            </div>
         </div>
     </div>
     <div class="col-md-8">
-        <input type="text" id="search" class="form-control mb-4 shadow-sm" placeholder="Искать город назначения...">
+        <input type="text" id="search" class="form-control mb-4 shadow-sm py-2" style="border-radius:12px"
+               placeholder="Поиск по городу назначения...">
         <div id="list" class="row"></div>
     </div>
 </div>
+
 <script>
     const s = document.getElementById('search'), l = document.getElementById('list');
     const update = async () => {
@@ -39,10 +61,13 @@
         const data = await res.json();
         l.innerHTML = data.map(t => `
             <div class="col-md-6 mb-3">
-                <div class="card p-3">
-                    <h5 class="text-primary">${t.from} → ${t.to}</h5>
-                    <p class="small text-muted mb-2">Бюджет: ${t.budget} ₽</p>
-                    <a href="/trip/${t.id}" class="btn btn-sm btn-primary">Детали путешествия</a>
+                <div class="ya-card p-3 position-relative">
+                    <form action="/delete_trip/${t.id}" method="POST" class="position-absolute top-0 end-0 p-2" onsubmit="return confirm('Удалить?')">
+                        <button class="btn btn-link text-muted p-0"><i class="bi bi-trash"></i></button>
+                    </form>
+                    <h5 class="fw-bold mb-1">${t.from} → ${t.to}</h5>
+                    <p class="small text-muted mb-3">${t.budget} ₽</p>
+                    <a href="/trip/${t.id}" class="btn btn-ya btn-sm w-100">Детали</a>
                 </div>
             </div>
         `).join('');

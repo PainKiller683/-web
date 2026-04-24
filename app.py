@@ -15,8 +15,9 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Ключи получать тут: https://yandex.ru
-MAPS_API_KEY = "c585582f-eef6-4946-aa74-544317085ccf"
+# ВАШИ ПРОВЕРЕННЫЕ КЛЮЧИ
+MAPS_API_KEY = "dee62b31-e202-4cec-92b9-9af1e604d8f1"
+GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 RASP_API_KEY = "13bbc4a8-f7c8-418e-bd4c-40b72b78c48f"
 WEATHER_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 
@@ -44,53 +45,135 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-
 def get_city_info(city_name):
     try:
-        geo_url = f"https://yandex.ru{MAPS_API_KEY}&geocode={city_name}&format=json"
-        geo_data = requests.get(geo_url).json()
-        pos = geo_data['response']['GeoObjectCollection']['featureMember']['GeoObject']['Point']['pos']
+        # 1. ГЕОКОДЕР (используем GEO_API_KEY)
+        geo_url = "https://yandex.ru"
+        r = requests.get(geo_url, params={
+            "apikey": GEO_API_KEY,
+            "geocode": city_name,
+            "format": "json"
+        }).json()
+        pos = r['response']['GeoObjectCollection']['featureMember']['GeoObject']['Point']['pos']
         lon, lat = pos.split(' ')
-        near_url = f"https://yandex.net{RASP_API_KEY}&lat={lat}&lng={lon}&format=json"
-        near_data = requests.get(near_url).json()
-        yandex_code = near_data.get('code')
+        near_url = "https://yandex.net"
+        n_res = requests.get(near_url, params={
+            "apikey": RASP_API_KEY,
+            "lat": lat, "lng": lon, "format": "json"
+        }).json()
 
-        return {'lat': lat, 'lon': lon, 'code': yandex_code}
+        return {'lat': lat, 'lon': lon, 'code': n_res.get('code')}
     except Exception as e:
-        print(f"Ошибка гео-поиска {city_name}: {e}")
+        print(f"Ошибка гео: {e}")
         return None
 
 
 def get_weather(lat, lon):
-    url = f"https://yandex.ru{lat}&lon={lon}&lang=ru_RU"
+    url = "https://yandex.ru"
     headers = {'X-Yandex-API-Key': WEATHER_API_KEY}
     try:
-        response = requests.get(url, headers=headers)
-        data = response.json()
+        r = requests.get(url, headers=headers, params={'lat': lat, 'lon': lon, 'lang': 'ru_RU'}).json()
         return {
-            "temp": f"{data['fact']['temp']}°C",
-            "condition": data['fact']['condition']
+            "temp": f"{r['fact']['temp']}°",
+            "condition": r['fact']['condition'],
+            "icon": r['fact']['icon'] # Передаем только код иконки, например 'ovc'
         }
-    except Exception as e:
-        print(f"Ошибка погоды: {e}")
-        return {"temp": "??", "condition": "нет данных"}
-
-
-def get_routes(code_from, code_to):
-    date_now = datetime.now().strftime('%Y-%m-%d')
-    url = f"https://yandex.net{RASP_API_KEY}&from={code_from}&to={code_to}&lang=ru_RU&date={date_now}&limit=5"
-    try:
-        data = requests.get(url).json()
-        return data.get('segments', [])
-    except Exception as e:
-        print(f"Ошибка расписаний: {e}")
-        return []
+    except:
+        return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
 
 
 @app.route('/')
 @login_required
 def index():
     return render_template('index.html')
+
+
+@app.route('/add_trip', methods=['POST'])
+@login_required
+def add_trip():
+    new_trip = Trip(
+        city_from=request.form['city_from'],
+        city_to=request.form['city_to'],
+        budget_limit=int(request.form.get('budget_limit', 0)),
+        days_count=int(request.form.get('days_count', 1)),
+        user_id=current_user.id
+    )
+    db.session.add(new_trip)
+    db.session.commit()
+    return redirect(url_for('index'))
+
+
+@app.route('/delete_trip/<int:trip_id>', methods=['POST'])
+@login_required
+def delete_trip(trip_id):
+    trip = Trip.query.filter_by(id=trip_id, user_id=current_user.id).first_or_404()
+    db.session.delete(trip)
+    db.session.commit()
+    return redirect(url_for('index'))
+
+
+@app.route('/trip/<int:trip_id>')
+@login_required
+def trip_details(trip_id):
+    trip = Trip.query.get_or_404(trip_id)
+    info_from = get_city_info(trip.city_from)
+    info_to = get_city_info(trip.city_to)
+
+    weather = {"temp": "??", "condition": "неизвестно", "icon": "ovc"}
+    segments = []
+
+    if info_to:
+        weather = get_weather(info_to['lat'], info_to['lon'])
+        if info_from and info_from.get('code') and info_to.get('code'):
+            r_url = "https://yandex.net"
+            res = requests.get(r_url, params={
+                "apikey": RASP_API_KEY, "from": info_from['code'],
+                "to": info_to['code'], "date": datetime.now().strftime('%Y-%m-%d')
+            }).json()
+            segments = res.get('segments', [])
+
+    daily = trip.budget_limit // trip.days_count if trip.days_count > 0 else 0
+    hotels = "Хостелы" if daily < 3000 else "Отели 3*" if daily < 7000 else "Отели 5*"
+    acts = "Прогулки" if daily < 3000 else "Музеи" if daily < 7000 else "Гиды и рестораны"
+
+    return render_template('trip_view.html', trip=trip, daily=daily,
+                           weather=weather, hotels=hotels, acts=acts,
+                           segments=segments, maps_key=MAPS_API_KEY)
+
+
+@app.route('/api/my_trips')
+@login_required
+def api_trips():
+    q = request.args.get('q', '').lower()
+    trips = Trip.query.filter_by(user_id=current_user.id).filter(Trip.city_to.ilike(f"%{q}%")).all()
+    return jsonify([{"id": t.id, "from": t.city_from, "to": t.city_to, "budget": t.budget_limit} for t in trips])
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+def get_routes(code_from, code_to):
+    url = requests.get('https://api.rasp.yandex.ru/rasp/v1/stations/search')
+
+    params = {
+        "apikey": "13bbc4a8-f7c8-418e-bd4c-40b72b78c48f",
+        "from": code_from,
+        "to": code_to,
+        "format": "json",
+        "lang": "ru_RU",
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "limit": 5
+    }
+
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        return data.get('segments', [])
+    except Exception as e:
+        print(f"Ошибка Расписаний: {e}")
+        return []
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -127,52 +210,6 @@ def logout():
     return redirect(url_for('login'))
 
 
-@app.route('/add_trip', methods=['POST'])
-@login_required
-def add_trip():
-    trip = Trip(city_from=request.form['city_from'],
-                city_to=request.form['city_to'],
-                budget_limit=int(request.form.get('budget_limit', 0)),
-                days_count=int(request.form.get('days_count', 1)),
-                user_id=current_user.id)
-    db.session.add(trip)
-    db.session.commit()
-    return redirect(url_for('index'))
-
-
-@app.route('/trip/<int:trip_id>')
-@login_required
-def trip_details(trip_id):
-    trip = Trip.query.get_or_404(trip_id)
-
-    # 1. Находим инфо по городам (координаты и коды)
-    info_from = get_city_info(trip.city_from)
-    info_to = get_city_info(trip.city_to)
-
-    weather = {"temp": "??", "condition": "город не найден"}
-    segments = []
-
-    # 2. Если город назначения найден, запрашиваем погоду и рейсы
-    if info_to:
-        weather = get_weather(info_to['lat'], info_to['lon'])
-        if info_from and info_from['code'] and info_to['code']:
-            segments = get_routes(info_from['code'], info_to['code'])
-
-    # 3. Расчет бюджета (старый код)
-    daily = trip.budget_limit // trip.days_count if trip.days_count > 0 else 0
-    if daily < 3000:
-        hotels, acts = "Хостелы", "Бесплатные парки"
-    elif daily < 8000:
-        hotels, acts = "Отели 3*", "Музеи и кафе"
-    else:
-        hotels, acts = "Отели 5*", "Рестораны и гиды"
-
-    return render_template('trip_view.html', trip=trip, daily=daily,
-                           weather=weather, hotels=hotels, acts=acts,
-                           segments=segments, maps_key=MAPS_API_KEY)
-
-
-# --- ИМПОРТ / ЭКСПОРТ ---
 
 @app.route('/export')
 @login_required
@@ -204,12 +241,6 @@ def import_csv():
     return redirect(url_for('index'))
 
 
-@app.route('/api/my_trips')
-@login_required
-def api_trips():
-    q = request.args.get('q', '').lower()
-    trips = Trip.query.filter_by(user_id=current_user.id).filter(Trip.city_to.ilike(f"%{q}%")).all()
-    return jsonify([{"id": t.id, "from": t.city_from, "to": t.city_to, "budget": t.budget_limit} for t in trips])
 
 
 if __name__ == '__main__':

@@ -1,120 +1,101 @@
 {% extends "base.html" %}
 {% block content %}
+<!-- Иконки Bootstrap -->
 <link rel="stylesheet" href="https://yastatic.net">
 
-<div class="row g-4">
-    <div class="col-md-8">
-        <div class="card border-0 shadow-sm mb-4" style="border-radius: 20px; overflow: hidden;">
-            <div class="card-body p-0">
-                <div id="map" style="width:100%;height:450px;"></div>
-            </div>
-            <div class="card-footer bg-white p-4 border-0">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h3 class="fw-bold mb-0">{{ trip.city_from }} <i class="bi bi-arrow-right text-primary mx-2"></i> {{ trip.city_to }}</h3>
-                    <a href="https://yandex.ru{{ trip.city_from }}&toName={{ trip.city_to }}" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill">Смотреть все рейсы</a>
+<style>
+    body { background: #f6f6f6; font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; }
+    .ya-box { background: #fff; border-radius: 20px; border: 1px solid #eee; padding: 25px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+    .btn-ya { background: #fc0; border: none; border-radius: 12px; padding: 10px 20px; font-weight: 500; color: #000; text-decoration: none; display: inline-block; }
+    .btn-ya:hover { background: #f5c400; color: #000; }
+    #map { border-radius: 16px; overflow: hidden; background: #f0f0f0; border: 1px solid #ddd; width: 100%; height: 400px; }
+</style>
+
+<div class="container py-3">
+    <div class="row">
+        <!-- Левая колонка -->
+        <div class="col-md-8">
+            <div class="ya-box">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="h4 fw-bold mb-0">{{ trip.city_from }} — {{ trip.city_to }}</h2>
+                    <form action="/delete_trip/{{ trip.id }}" method="POST" onsubmit="return confirm('Удалить этот план?')">
+                        <button class="btn btn-link text-danger text-decoration-none small p-0"><i class="bi bi-trash"></i> Удалить план</button>
+                    </form>
+                </div>
+
+                <!-- Карта -->
+                <div id="map"></div>
+
+                <!-- Рейсы -->
+                <div class="mt-4">
+                    <h5 class="fw-bold mb-3">Рейсы на сегодня</h5>
+                    {% for s in segments %}
+                    <div class="d-flex justify-content-between align-items-center py-3 border-bottom">
+                        <div>
+                            <div class="fw-bold text-dark">{{ s.thread.title }}</div>
+                            <small class="text-muted">{{ s.departure[11:16] }} • {{ s.thread.transport_type_title }}</small>
+                        </div>
+                        <a href="https://t.rasp.yandex.ru" target="_blank" class="btn btn-ya btn-sm">Билеты</a>
+                    </div>
+                    {% else %}
+                    <p class="text-muted small py-2">Прямых рейсов не найдено. Попробуйте изменить дату или города.</p>
+                    {% endfor %}
                 </div>
             </div>
         </div>
 
-        <div class="card border-0 shadow-sm" style="border-radius: 20px;">
-            <div class="card-body p-4">
-                <h5 class="fw-bold mb-4"><i class="bi bi-clock-history me-2 text-primary"></i>Ближайшие рейсы (Яндекс.Расписания)</h5>
-
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Транспорт</th>
-                                <th>Маршрут</th>
-                                <th>Время</th>
-                                <th class="text-end">В пути</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for s in segments %}
-                            <tr>
-                                <td>
-                                    {% if s.thread.transport_type == 'plane' %}<i class="bi bi-airplane"></i>
-                                    {% elif s.thread.transport_type == 'train' %}<i class="bi bi-train-front"></i>
-                                    {% else %}<i class="bi bi-bus-front"></i>{% endif %}
-                                    <span class="small ms-1 text-uppercase text-muted">{{ s.thread.transport_type }}</span>
-                                </td>
-                                <td><span class="fw-semibold">{{ s.thread.title }}</span></td>
-                                <td>
-                                    <div class="small">Отпр: {{ s.departure[11:16] }}</div>
-                                    <div class="small text-muted">Приб: {{ s.arrival[11:16] }}</div>
-                                </td>
-                                <td class="text-end fw-bold text-primary">{{ (s.duration / 3600) | round(1) }} ч.</td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="4" class="text-center py-4 text-muted">Прямых рейсов на сегодня не найдено</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm mb-4 text-white" style="border-radius: 20px; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="text-uppercase opacity-75 small fw-bold">Погода в точке прибытия</h6>
-                        <h1 class="display-4 fw-bold mb-0">{{ weather.temp }}</h1>
-                        <p class="text-capitalize mb-0">{{ weather.condition }}</p>
-                    </div>
-                    <div class="text-center">
-                        <img src="https://yastatic.net{{ weather.icon }}.svg" alt="weather" style="width: 80px;">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm bg-dark text-white" style="border-radius: 20px;">
-            <div class="card-body p-4">
-                <h6 class="text-uppercase text-warning small fw-bold mb-3">Ваш план расходов</h6>
-                <h2 class="fw-bold mb-1">{{ trip.budget_limit }} ₽</h2>
-                <div class="badge bg-secondary mb-4">{{ daily }} ₽ / в день</div>
-
-                <hr class="opacity-25">
-
-                <div class="mb-3">
-                    <label class="text-muted small d-block mb-1">РЕКОМЕНДУЕМОЕ ЖИЛЬЕ</label>
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-house-door me-2 text-info"></i>
-                        <span class="fw-bold">{{ hotels }}</span>
-                    </div>
-                </div>
-
+        <!-- Правая колонка -->
+        <div class="col-md-4">
+            <!-- Погода -->
+            <div class="ya-box d-flex align-items-center justify-content-between shadow-sm">
                 <div>
-                    <label class="text-muted small d-block mb-1">ЧЕМ ЗАНЯТЬСЯ</label>
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-geo-alt me-2 text-danger"></i>
-                        <span class="fw-bold">{{ acts }}</span>
-                    </div>
+                    <small class="text-muted fw-bold text-uppercase" style="font-size:10px">Погода в {{ trip.city_to }}</small>
+                    <div class="h2 fw-bold mb-0 mt-1">{{ weather.temp }}</div>
+                    <div class="text-capitalize small text-muted">{{ weather.condition }}</div>
                 </div>
+                <!-- Исправленный путь к иконке -->
+                <img src="https://yastatic.net{{ weather.icon }}.svg" width="60" alt="weather">
+            </div>
 
-                <button class="btn btn-warning w-100 mt-4 rounded-pill fw-bold py-2 shadow-sm">Забронировать тур</button>
+            <!-- Бюджет -->
+            <div class="ya-box bg-dark text-white">
+                <h5 class="text-warning fw-bold mb-3"><i class="bi bi-wallet2"></i> Бюджет</h5>
+                <div class="h3 fw-bold mb-4">{{ daily }} ₽ <span class="fs-6 opacity-50 fw-normal">/ день</span></div>
+
+                <div class="small mb-3">
+                    <p class="text-muted mb-1 text-uppercase fw-bold" style="font-size: 10px; letter-spacing: 1px;">Жилье</p>
+                    <div class="fs-6">{{ hotels }}</div>
+                </div>
+                <div class="small mb-3">
+                    <p class="text-muted mb-1 text-uppercase fw-bold" style="font-size: 10px; letter-spacing: 1px;">Досуг</p>
+                    <div class="fs-6">{{ acts }}</div>
+                </div>
+                <hr class="opacity-25">
+                <div class="small text-muted text-center">Всего на поездку: {{ trip.budget_limit }} ₽</div>
             </div>
         </div>
     </div>
 </div>
 
-<script src="https://yandex.ru{{ maps_key }}&lang=ru_RU" type="text/javascript"></script>
+<script src="https://api-maps.yandex.ru/2.1/?apikey=c585582f-eef6-4946-aa74-544317085ccf&lang=ru_RU" type="text/javascript"> </script>
+
 <script>
+    // Проверка, что ymaps загрузился
     ymaps.ready(() => {
-        let m = new ymaps.Map("map", {center: [55.7, 37.6], zoom: 5, controls: ['zoomControl']});
-        let r = new ymaps.multiRouter.MultiRoute({
+        const m = new ymaps.Map("map", {
+            center: [55.7, 37.6],
+            zoom: 7,
+            controls: ['zoomControl', 'fullscreenControl']
+        });
+
+        const r = new ymaps.multiRouter.MultiRoute({
             referencePoints: ["{{ trip.city_from }}", "{{ trip.city_to }}"]
         }, {
             boundsAutoApply: true,
-            routeActiveStrokeWidth: 5,
-            routeActiveStrokeColor: "#2575fc"
+            routeActiveStrokeColor: "#fc0",
+            routeActiveStrokeWidth: 5
         });
+
         m.geoObjects.add(r);
     });
 </script>
