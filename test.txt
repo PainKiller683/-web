@@ -1,0 +1,47 @@
+import requests
+from flask import Flask, render_template, request
+
+app = Flask(__name__)
+
+# Ваши ключи
+GEO_KEY = "ВАШ_ГЕОКОДЕР_КЛЮЧ"
+RASP_KEY = "ВАШ_РАСПИСАНИЙ_КЛЮЧ"
+
+def get_data(city_name):
+    """Получаем координаты и код станции города"""
+    # 1. Координаты через Геокодер
+    geo_url = f"https://yandex.ru{GEO_KEY}&geocode={city_name}&format=json"
+    geo_res = requests.get(geo_url).json()
+    pos = geo_res['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['Point']['pos']
+    lon, lat = pos.split()
+    
+    # 2. Код станции через API Расписаний (по координатам)
+    near_url = f"https://yandex.net{RASP_KEY}&lat={lat}&lng={lon}&format=json"
+    near_res = requests.get(near_url).json()
+    code = near_res['code']
+    
+    return {"lat": lat, "lon": lon, "code": code}
+
+@app.route('/')
+def main():
+    # Точки А и Б (например, из формы)
+    start_city = request.args.get('from', 'Москва')
+    end_city = request.args.get('to', 'Санкт-Петербург')
+
+    # Получаем данные для обеих точек
+    point_a = get_data(start_city)
+    point_b = get_data(end_city)
+
+    # 3. Список рейсов
+    rasp_url = f"https://yandex.net{RASP_KEY}&from={point_a['code']}&to={point_b['code']}&format=json"
+    trips = requests.get(rasp_url).json().get('segments', [])
+
+    # 4. Ссылка на статическую карту с линией
+    # Формат: pl=lon1,lat1,lon2,lat2 (линия между точками)
+    map_url = (
+        f"https://yandex.ru"
+        f"&pt={point_a['lon']},{point_a['lat']},pm2al~{point_b['lon']},{point_b['lat']},pm2bl"
+        f"&pl={point_a['lon']},{point_a['lat']},{point_b['lon']},{point_b['lat']}"
+    )
+
+    return render_template('index.html', trips=trips, map_url=map_url)
