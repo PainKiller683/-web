@@ -47,7 +47,6 @@ class RegistrationForm(FlaskForm):
 
 
 class TripForm(FlaskForm):
-    """Форма для планирования новой поездки."""
     city = StringField(
         'Город назначения',
         validators=[DataRequired(message="Укажите город, в который планируете поехать")]

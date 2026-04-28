@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="https://yastatic.net">
 <style>
     body { background: #f6f6f6; font-family: sans-serif; }
     .ya-card { background: #fff; border-radius: 16px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
     .btn-ya { background: #fc0; border: none; color: #000; border-radius: 10px; font-weight: 500; }
+    { width: 100%; height: 350px; border-radius: 16px; margin-bottom: 20px; display: none; }
+    .schedule-container { display: none; margin-top: 15px; }
 </style>
 
 <div class="row mb-4">
@@ -48,30 +49,65 @@
         </div>
     </div>
     <div class="col-md-8">
+        <div id="map" class="ya-card shadow-sm"></div>
+
         <input type="text" id="search" class="form-control mb-4 shadow-sm py-2" style="border-radius:12px"
-               placeholder="Поиск по городу назначения...">
+           placeholder="Поиск по городу назначения...">
         <div id="list" class="row"></div>
     </div>
 </div>
 
 <script>
     const s = document.getElementById('search'), l = document.getElementById('list');
-    const update = async () => {
-        const res = await fetch(`/api/my_trips?q=${s.value}`);
-        const data = await res.json();
-        l.innerHTML = data.map(t => `
-            <div class="col-md-6 mb-3">
-                <div class="ya-card p-3 position-relative">
-                    <form action="/delete_trip/${t.id}" method="POST" class="position-absolute top-0 end-0 p-2" onsubmit="return confirm('Удалить?')">
-                        <button class="btn btn-link text-muted p-0"><i class="bi bi-trash"></i></button>
-                    </form>
-                    <h5 class="fw-bold mb-1">${t.from} → ${t.to}</h5>
-                    <p class="small text-muted mb-3">${t.budget} ₽</p>
-                    <a href="/trip/${t.id}" class="btn btn-ya btn-sm w-100">Детали</a>
+let myMap;
+
+// Инициализация карты
+ymaps.ready(() => {
+    myMap = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 5 });
+});
+
+const showOnMap = async (cityFrom, cityTo) => {
+    document.getElementById('map').style.display = 'block';
+
+    // Запрос к вашему Flask API (который мы создали ранее)
+    const res = await fetch(`/get_route_data?from=${cityFrom}&to=${cityTo}`);
+    const data = await res.json();
+
+    if (data.error) return alert("Ошибка получения координат");
+
+    myMap.geoObjects.removeAll();
+
+    const coords = [[data.start.lat, data.start.lon], [data.end.lat, data.end.lon]];
+    const polyline = new ymaps.Polyline(coords, {}, { strokeColor: "#fc0", strokeWidth: 5 });
+
+    myMap.geoObjects.add(polyline);
+    myMap.geoObjects.add(new ymaps.Placemark(coords[0], {balloonContent: 'Старт: ' + cityFrom}));
+    myMap.geoObjects.add(new ymaps.Placemark(coords[1], {balloonContent: 'Финиш: ' + cityTo}));
+
+    myMap.setBounds(polyline.geometry.getBounds(), {checkZoomRange: true});
+};
+
+const update = async () => {
+    const res = await fetch(`/api/my_trips?q=${s.value}`);
+    const data = await res.json();
+    l.innerHTML = data.map(t => `
+        <div class="col-md-6 mb-3">
+            <div class="ya-card p-3 position-relative">
+                <form action="/delete_trip/${t.id}" method="POST" class="position-absolute top-0 end-0 p-2">
+                    <button class="btn btn-link text-muted p-0"><i class="bi bi-trash"></i></button>
+                </form>
+                <h5 class="fw-bold mb-1">${t.from} → ${t.to}</h5>
+                <p class="small text-muted mb-3">${t.budget} ₽</p>
+                <div class="d-flex gap-2">
+                    <button onclick="showOnMap('${t.from}', '${t.to}')" class="btn btn-ya btn-sm w-100">Карта и рейсы</button>
+                    <a href="/trip/${t.id}" class="btn btn-outline-secondary btn-sm">Инфо</a>
                 </div>
             </div>
-        `).join('');
-    };
-    s.oninput = update; window.onload = update;
+        </div>
+    `).join('');
+};
+
+s.oninput = update;
+window.onload = update;
 </script>
 {% endblock %}

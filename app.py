@@ -15,10 +15,10 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# ВАШИ ПРОВЕРЕННЫЕ КЛЮЧИ
-MAPS_API_KEY = "dee62b31-e202-4cec-92b9-9af1e604d8f1"
+#Ключи
+MAPS_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
-RASP_API_KEY = "13bbc4a8-f7c8-418e-bd4c-40b72b78c48f"
+RASP_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 WEATHER_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 
 
@@ -46,26 +46,19 @@ def load_user(user_id):
 
 
 def get_city_info(city_name):
-    try:
-        # 1. ГЕОКОДЕР (используем GEO_API_KEY)
-        geo_url = "https://yandex.ru"
-        r = requests.get(geo_url, params={
-            "apikey": GEO_API_KEY,
-            "geocode": city_name,
-            "format": "json"
-        }).json()
-        pos = r['response']['GeoObjectCollection']['featureMember']['GeoObject']['Point']['pos']
-        lon, lat = pos.split(' ')
-        near_url = "https://yandex.net"
-        n_res = requests.get(near_url, params={
-            "apikey": RASP_API_KEY,
-            "lat": lat, "lng": lon, "format": "json"
-        }).json()
-
-        return {'lat': lat, 'lon': lon, 'code': n_res.get('code')}
-    except Exception as e:
-        print(f"Ошибка гео: {e}")
-        return None
+    geo_url = "https://geocode-maps.yandex.ru/v1"
+    params = {
+        "apikey": GEO_API_KEY,
+        "geocode": city_name,
+        "format": "json",
+        "lang": "ru_RU"
+    }
+    r = requests.get(geo_url, params=params).json()
+    pos = r['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['Point']['pos']
+    adress = r['response']['GeoObjectCollection']['featureMember']['GeoObject']['metaDataProperty']['GeocoderMetaData']['Address']
+    lon, lat = pos.split(' ')
+    print(adress)
+    return {"lat": float(lat), "lon": float(lon), }
 
 
 def get_weather(lat, lon):
@@ -76,7 +69,7 @@ def get_weather(lat, lon):
         return {
             "temp": f"{r['fact']['temp']}°",
             "condition": r['fact']['condition'],
-            "icon": r['fact']['icon'] # Передаем только код иконки, например 'ovc'
+            "icon": r['fact']['icon']
         }
     except:
         return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
@@ -125,7 +118,7 @@ def trip_details(trip_id):
     if info_to:
         weather = get_weather(info_to['lat'], info_to['lon'])
         if info_from and info_from.get('code') and info_to.get('code'):
-            r_url = "https://yandex.net"
+            r_url = "https://api.rasp.yandex-net.ru/v3.0/search/"
             res = requests.get(r_url, params={
                 "apikey": RASP_API_KEY, "from": info_from['code'],
                 "to": info_to['code'], "date": datetime.now().strftime('%Y-%m-%d')
@@ -155,10 +148,10 @@ def load_user(user_id):
 
 
 def get_routes(code_from, code_to):
-    url = requests.get('https://api.rasp.yandex.ru/rasp/v1/stations/search')
+    url = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/')
 
     params = {
-        "apikey": "13bbc4a8-f7c8-418e-bd4c-40b72b78c48f",
+        "apikey": "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3",
         "from": code_from,
         "to": code_to,
         "format": "json",
