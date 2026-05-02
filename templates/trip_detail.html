@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <!-- Иконки Bootstrap -->
-<script src="https://api.rasp.yandex-net.ru/v3.0/search/" type="text/javascript"> </script>
+<link rel="stylesheet" href="https://yastatic.net">
 
 <style>
     body { background: #f6f6f6; font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; }
@@ -60,6 +60,7 @@
                         <h2 class="fw-bold mb-0">{{ weather.temp }}</h2>
                         <small class="text-capitalize">{{ weather.condition }}</small>
                     </div>
+                    <img src="https://yastatic.net{{ weather.icon }}.svg" style="width: 60px;" alt="weather">
                 </div>
             </div>
 
@@ -100,7 +101,7 @@
     </div>
 </div>
 
-<script src="https://api.rasp.yandex-net.ru/v3.0/search/" type="text/javascript"> </script>
+<script src="https://api-maps.yandex.ru/2.1/?apikey=c585582f-eef6-4946-aa74-544317085ccf&lang=ru_RU" type="text/javascript"> </script>
 
 <script type="text/javascript">
     ymaps.ready(function () {

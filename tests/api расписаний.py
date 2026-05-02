@@ -31,7 +31,7 @@ def get_city_info(city_name):
         # pos = r['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['Point']['pos']
         # lon, lat = pos.split(' ')
 
-    #Рейсы от точки до точки(нужны кодлы городов)
+    #Рейсы от точки до точки(нужны коды городов)
         # r1 = f'https://api.rasp.yandex-net.ru/v3.0/search/?apikey={RASP_API_KEY}&format=json&from=c146&to=c213&lang=ru_RU&page=1&date=2026-04-30'
         # r2 = requests.get(r1).json()
 

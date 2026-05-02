@@ -21,6 +21,10 @@ GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 RASP_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 WEATHER_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 
+class Waypoint(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    place_name = db.Column(db.String(200))
+    trip_id = db.Column(db.Integer, db.ForeignKey('trip.id'))
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -32,6 +36,7 @@ class User(UserMixin, db.Model):
 
 
 class Trip(db.Model):
+    waypoints = db.relationship('Waypoint', backref='trip', lazy=True)
     id = db.Column(db.Integer, primary_key=True)
     city_from = db.Column(db.String(100), nullable=False)
     city_to = db.Column(db.String(100), nullable=False)
@@ -44,21 +49,72 @@ class Trip(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-
-def get_city_info(city_name):
-    geo_url = "https://geocode-maps.yandex.ru/v1"
+def get_station_code(lat, lon):
+    """Находит код ближайшего транспортного узла по координатам"""
+    url = "https://api.rasp.yandex-net.ru/v3.0/nearest_stations/"
     params = {
-        "apikey": GEO_API_KEY,
-        "geocode": city_name,
+        "apikey": RASP_API_KEY,
+        "lat": lat,
+        "lng": lon,
+        "distance": 50,  # Радиус поиска в км
         "format": "json",
         "lang": "ru_RU"
     }
-    r = requests.get(geo_url, params=params).json()
-    pos = r['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['Point']['pos']
-    adress = r['response']['GeoObjectCollection']['featureMember']['GeoObject']['metaDataProperty']['GeocoderMetaData']['Address']
-    lon, lat = pos.split(' ')
-    print(adress)
-    return {"lat": float(lat), "lon": float(lon), }
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        # Возвращаем код станции (тип 'station') или города (тип 'settlement')
+        if data.get('stations'):
+            return data['stations'][0]['code']
+        return None
+    except Exception as e:
+        print(f"Ошибка API Расписаний (nearest): {e}")
+        return None
+
+
+# def get_rasp_segments(code_from, code_to):
+#     if not code_from or not code_to:
+#         return []
+#
+#     url = "https://api.rasp.yandex-net.ru/v3.0/search/ "
+#     params = {
+#         "apikey": RASP_API_KEY,
+#         "from": code_from,
+#         "to": code_to,
+#         "date": datetime.now().strftime('%Y-%m-%d'),
+#         "format": "json"
+#     }
+#     try:
+#         res = requests.get(url, params=params).json()
+#         return res.get('segments', [])  # Список всех найденных рейсов
+#     except:
+#         return []
+
+
+def get_city_info(city_name):
+    # 1. Получаем координаты через Геокодер
+    geo_url = "https://geocode-maps.yandex.ru/v1"
+    params = {"apikey": GEO_API_KEY, "geocode": city_name, "format": "json"}
+    try:
+        r = requests.get(geo_url, params=params).json()
+        geo_object = r['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']
+        pos = geo_object['Point']['pos']
+        lon, lat = pos.split(' ')
+
+        # 2. Сразу ищем код станции Яндекса по этим координатам
+        rasp_url = "https://api.rasp.yandex-net.ru/v3.0/nearest_stations/"
+        r_rasp = requests.get(rasp_url, params={
+            "apikey": RASP_API_KEY, "lat": lat, "lng": lon, "distance": 50, "format": "json"
+        }).json()
+
+        station_code = None
+        if r_rasp.get('stations'):
+            station_code = r_rasp['stations'][0]['code']  # Берем самую ближайшую
+
+        return {"lat": float(lat), "lon": float(lon), "code": station_code}
+    except Exception as e:
+        print(f"Ошибка геокодирования города {city_name}: {e}")
+        return None
 
 
 def get_weather(lat, lon):
@@ -81,20 +137,56 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/my_trips')
+@login_required
+def api_trips():
+    q = request.args.get('q', '').lower()
+    # Берем поездки только текущего пользователя
+    trips = Trip.query.filter_by(user_id=current_user.id).all()
+
+    # Фильтруем, если введен поиск
+    if q:
+        trips = [t for t in trips if q in t.city_to.lower() or q in t.city_from.lower()]
+
+    return jsonify([{
+        "id": t.id,
+        "from": t.city_from,
+        "to": t.city_to,
+        "budget": t.budget_limit
+    } for t in trips])
+
+
 @app.route('/add_trip', methods=['POST'])
 @login_required
 def add_trip():
     new_trip = Trip(
         city_from=request.form['city_from'],
         city_to=request.form['city_to'],
-        budget_limit=int(request.form.get('budget_limit', 0)),
-        days_count=int(request.form.get('days_count', 1)),
+        budget_limit=int(request.form.get('budget_limit', 0) or 0),
+        days_count=int(request.form.get('days_count', 1) or 1),
         user_id=current_user.id
     )
     db.session.add(new_trip)
     db.session.commit()
-    return redirect(url_for('index'))
+    # Сразу перекидываем пользователя на страницу только что созданной поездки
+    return redirect(url_for('trip_details', trip_id=new_trip.id))
 
+
+@app.route('/get_route_data')
+@login_required
+def get_route_data():
+    city_from = request.args.get('from')
+    city_to = request.args.get('to')
+
+    data_from = get_city_info(city_from)
+    data_to = get_city_info(city_to)
+
+    if data_from and data_to:
+        return jsonify({
+            "start": {"lat": data_from['lat'], "lon": data_from['lon']},
+            "end": {"lat": data_to['lat'], "lon": data_to['lon']}
+        })
+    return jsonify({"error": "not found"}), 404
 
 @app.route('/delete_trip/<int:trip_id>', methods=['POST'])
 @login_required
@@ -112,34 +204,48 @@ def trip_details(trip_id):
     info_from = get_city_info(trip.city_from)
     info_to = get_city_info(trip.city_to)
 
-    weather = {"temp": "??", "condition": "неизвестно", "icon": "ovc"}
-    segments = []
-
+    # 1. Погода
+    weather = {"temp": "??", "condition": "нет данных", "icon": "ovc"}
     if info_to:
         weather = get_weather(info_to['lat'], info_to['lon'])
-        if info_from and info_from.get('code') and info_to.get('code'):
-            r_url = "https://api.rasp.yandex-net.ru/v3.0/search/"
+
+    # 2. Рейсы Яндекс Расписаний
+    segments = []
+    if info_from and info_from.get('code') and info_to and info_to.get('code'):
+        try:
+            r_url = "https://api.rasp.yandex-net.ru/v3.0/schedule/"
             res = requests.get(r_url, params={
-                "apikey": RASP_API_KEY, "from": info_from['code'],
-                "to": info_to['code'], "date": datetime.now().strftime('%Y-%m-%d')
+                "apikey": RASP_API_KEY,
+                "from": info_from['code'],
+                "to": info_to['code'],
+                "date": datetime.now().strftime('%Y-%m-%d')
             }).json()
             segments = res.get('segments', [])
+        except:
+            segments = []
 
+    # 3. Расчет бюджета (исправляем ошибку UndefinedError)
     daily = trip.budget_limit // trip.days_count if trip.days_count > 0 else 0
     hotels = "Хостелы" if daily < 3000 else "Отели 3*" if daily < 7000 else "Отели 5*"
-    acts = "Прогулки" if daily < 3000 else "Музеи" if daily < 7000 else "Гиды и рестораны"
+    acts = "Прогулки" if daily < 3000 else "Музеи" if daily < 7000 else "Гиды"
 
-    return render_template('trip_view.html', trip=trip, daily=daily,
-                           weather=weather, hotels=hotels, acts=acts,
-                           segments=segments, maps_key=MAPS_API_KEY)
+    # Считаем траты (если у вас пока нет таблицы трат, ставим 0)
+    spent = 0
+    rem = trip.budget_limit - spent  # Остаток
+    prog = (spent / trip.budget_limit * 100) if trip.budget_limit > 0 else 0  # Прогресс-бар
 
-
-@app.route('/api/my_trips')
-@login_required
-def api_trips():
-    q = request.args.get('q', '').lower()
-    trips = Trip.query.filter_by(user_id=current_user.id).filter(Trip.city_to.ilike(f"%{q}%")).all()
-    return jsonify([{"id": t.id, "from": t.city_from, "to": t.city_to, "budget": t.budget_limit} for t in trips])
+    return render_template('trip_detail.html',
+                           trip=trip,
+                           daily=daily,
+                           weather=weather,
+                           hotels=hotels,
+                           acts=acts,
+                           segments=segments,
+                           maps_key=MAPS_API_KEY,
+                           coords_to=info_to,
+                           spent=spent,  # Передаем spent
+                           rem=rem,  # Передаем rem (исправляет вашу ошибку)
+                           prog=prog)  # Передаем prog
 
 
 @login_manager.user_loader
@@ -148,24 +254,27 @@ def load_user(user_id):
 
 
 def get_routes(code_from, code_to):
-    url = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/')
+    """Получает список всех рейсов между двумя кодами станций"""
+    if not code_from or not code_to:
+        return []
 
+    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
     params = {
-        "apikey": "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3",
+        "apikey": RASP_API_KEY,
         "from": code_from,
         "to": code_to,
+        "date": datetime.now().strftime('%Y-%m-%d'),
         "format": "json",
         "lang": "ru_RU",
-        "date": datetime.now().strftime('%Y-%m-%d'),
-        "limit": 5
+        "limit": 10  # Ограничим до 10 рейсов для экономии места
     }
-
     try:
         response = requests.get(url, params=params)
         data = response.json()
+        # Возвращаем список сегментов (рейсов)
         return data.get('segments', [])
     except Exception as e:
-        print(f"Ошибка Расписаний: {e}")
+        print(f"Ошибка API Расписаний (search): {e}")
         return []
 
 
