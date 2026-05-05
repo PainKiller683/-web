@@ -196,3 +196,4 @@ def get_today_trips(code_from, code_to):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
+print(get_routes('s9601931', 's9603093'))

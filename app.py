@@ -145,26 +145,6 @@ def get_station_code(lat, lon):
         print(f"Ошибка API Расписаний (nearest): {e}")
         return None
 
-
-# def get_rasp_segments(code_from, code_to):
-#     if not code_from or not code_to:
-#         return []
-#
-#     url = "https://api.rasp.yandex-net.ru/v3.0/search/ "
-#     params = {
-#         "apikey": RASP_API_KEY,
-#         "from": code_from,
-#         "to": code_to,
-#         "date": datetime.now().strftime('%Y-%m-%d'),
-#         "format": "json"
-#     }
-#     try:
-#         res = requests.get(url, params=params).json()
-#         return res.get('segments', [])  # Список всех найденных рейсов
-#     except:
-#         return []
-
-
 def get_city_info(city_name):
     # 1. Получаем координаты через Геокодер
     geo_url = "https://geocode-maps.yandex.ru/v1"
@@ -328,42 +308,55 @@ def load_user(user_id):
 
 
 @app.route('/get_today_trips')
-def get_today_trips(code_from, code_to):
-    # 1. Получаем текущую дату в формате 2026-05-05
+def get_today_trips():
+    # 1. Берем текущую дату (сегодня) в формате YYYY-MM-DD
+    # Это решает проблему пустого списка из-за старой или далекой даты
     today = datetime.now().strftime('%Y-%m-%d')
-    current_date = datetime.now().strftime('%Y-%m-%d')
+
+    # 2. Параметры запроса (используем правильные коды станций)
+    # s9601931 - Москва (Ленинградский), s9603093 - Тверь
     params = {
-        "apikey": RASP_API_KEY,
-        "from": code_from,
-        "to": code_to,
-        'date': current_date,
-        "system": "yandex",
-        "format": "json",
-        "lang": "ru_RU",
-        "limit": 10,
-        'transport_types': 'plane,train,suburban,bus',
-        'transfers': True
+        'apikey': RASP_API_KEY,
+        'from': 's9601931',
+        'to': 's9603093',
+        'date': today,
+        'format': 'json',
+        'lang': 'ru_RU'
     }
 
     try:
-        response = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/', params=params)
+        # Делаем запрос к Яндексу
+        response = requests.get(BASE_URL, params=params)
         data = response.json()
 
-        # Генерируем "человеческую" ссылку на сайт Яндекса для пользователя
-        # Чтобы он мог кликнуть и посмотреть расписание в браузере
-        web_link = f"https://yandex.ru{params['from']}&toId={params['to']}&date={today}"
+        # 3. Обработка рейсов и создание ссылок на покупку
+        results = []
+        # Проходим циклом по списку segments, который прислал Яндекс
+        for segment in data.get('segments', []):
+            thread_uid = segment.get('thread', {}).get('uid')
+            departure_time = segment.get('departure')
+            train_title = segment.get('thread', {}).get('title')
 
+            # Формируем прямую ссылку на сайт Яндекс Расписаний для этого рейса
+            # Параметр thread дает открыть конкретный поезд/электричку
+            booking_url = f"https://yandex.ru{thread_uid}?date={today}"
+
+            results.append({
+                'departure': departure_time,
+                'title': train_title,
+                'buy_link': booking_url
+            })
+
+        # 4. Возвращаем результат
         return jsonify({
-            "status": "success",
-            "date": today,
-            "segments_count": len(data.get('segments', [])),
-            "api_url": response.url,  # Ссылка, по которой сходил ваш код
-            "web_link": web_link,  # Ссылка для браузера
-            "data": data  # Весь ответ от Яндекса
+            'date': today,
+            'from_station': data.get('search', {}).get('from', {}).get('title'),
+            'to_station': data.get('search', {}).get('to', {}).get('title'),
+            'trips': results
         })
 
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({'error': str(e)}), 500
 
 def get_routes(code_from, code_to):
     if not code_from or not code_to:
