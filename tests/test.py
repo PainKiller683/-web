@@ -131,24 +131,23 @@ def get_routes(code_from, code_to):
     if not code_from or not code_to:
         return []
 
-    # 1. ИСПРАВЛЕН ДОМЕН (был yandex-net.ru, стал yandex.net)
-    url = "https://yandex.net"
-
+    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
+    current_date = datetime.now().strftime('%Y-%m-%d')
     params = {
         "apikey": RASP_API_KEY,
         "from": code_from,
         "to": code_to,
-        "date": datetime.now().strftime('%Y-%m-%d'),
-        "system": "yandex",  # 2. ОБЯЗАТЕЛЬНО: без этого s-коды не сработают!
+        'date': current_date,
+        "system": "yandex",
         "format": "json",
         "lang": "ru_RU",
-        "limit": 10
+        "limit": 10,
+        'transport_types': 'plane,train,suburban,bus'
     }
     try:
         response = requests.get(url, params=params)
         data = response.json()
         print(data)
-        # Если в res есть 'error', вы увидите причину
         if 'error' in data:
             print(f"Ошибка от API: {data['error']}")
 

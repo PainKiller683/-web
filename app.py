@@ -259,19 +259,25 @@ def get_routes(code_from, code_to):
         return []
 
     url = "https://api.rasp.yandex-net.ru/v3.0/search/"
+    current_date = datetime.now().strftime('%Y-%m-%d')
     params = {
         "apikey": RASP_API_KEY,
         "from": code_from,
         "to": code_to,
-        "date": datetime.now().strftime('%Y-%m-%d'),
+        'date': current_date,
+        "system": "yandex",
         "format": "json",
         "lang": "ru_RU",
-        "limit": 10  # Ограничим до 10 рейсов для экономии места
+        "limit": 10,
+        'transport_types': 'plane,train,suburban,bus'
     }
     try:
         response = requests.get(url, params=params)
         data = response.json()
-        # Возвращаем список сегментов (рейсов)
+        print(data)
+        if 'error' in data:
+            print(f"Ошибка от API: {data['error']}")
+
         return data.get('segments', [])
     except Exception as e:
         print(f"Ошибка API Расписаний (search): {e}")
