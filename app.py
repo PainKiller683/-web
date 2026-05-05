@@ -20,6 +20,7 @@ MAPS_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 RASP_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 WEATHER_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
+BASE_URL = 'https://yandex-net.ru'
 
 class Waypoint(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -44,10 +45,83 @@ class Trip(db.Model):
     days_count = db.Column(db.Integer, default=1)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
+class BudgetNote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    trip_id = db.Column(db.Integer, db.ForeignKey('trip.id')) # связь с поездкой
+    category = db.Column(db.String(50)) # "Жилье", "Досуг" и т.д.
+    amount = db.Column(db.Float, default=0.0)
+    description = db.Column(db.String(200))
+
+
+@app.route('/add_budget/<int:trip_id>', methods=['POST'])
+@login_required
+def add_budget(trip_id):
+    category = request.form.get('category')
+    try:
+        amount = float(request.form.get('amount', 0))
+    except (ValueError, TypeError):
+        amount = 0.0
+    description = request.form.get('description')
+
+    new_note = BudgetNote(trip_id=trip_id, category=category, amount=amount, description=description)
+    db.session.add(new_note)
+    db.session.commit()
+    return redirect(url_for('trip_details', trip_id=trip_id))
+
+@app.route('/trip/<int:trip_id>/action', methods=['POST'])
+@login_required
+def trip_action(trip_id):
+    amount_raw = request.form.get('amount')
+    category = request.form.get('category')
+    description = request.form.get('description')
+
+    if amount_raw:
+        try:
+            new_note = BudgetNote(
+                trip_id=trip_id,
+                amount=float(amount_raw),
+                category=category,
+                description=description
+            )
+            db.session.add(new_note)
+            db.session.commit()
+        except ValueError:
+            pass # Игнорируем некорректный ввод суммы
+
+    return redirect(url_for('trip_details', trip_id=trip_id))
+
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
+
+
+@app.route('/api/get_flights/<from_city>/<to_city>')
+@login_required
+def get_flights_api(from_city, to_city):
+    # Пытаемся найти коды городов через вашу функцию
+    info_from = get_city_info(from_city)
+    info_to = get_city_info(to_city)
+
+    code_from = info_from['code'] if info_from else None
+    code_to = info_to['code'] if info_to else None
+
+    if not code_from or not code_to:
+        return jsonify({"segments": [], "error": "Коды станций не найдены"})
+
+    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
+    params = {
+        "apikey": RASP_API_KEY,
+        "from": code_from,
+        "to": code_to,
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "limit": 5
+    }
+    try:
+        res = requests.get(url, params=params, timeout=5).json()
+        return jsonify(res)
+    except:
+        return jsonify({"segments": []})
 
 def get_station_code(lat, lon):
     """Находит код ближайшего транспортного узла по координатам"""
@@ -250,15 +324,13 @@ def trip_details(trip_id):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 
-def get_routes(code_from, code_to):
-    """Получает список всех рейсов между двумя кодами станций"""
-    if not code_from or not code_to:
-        return []
-
-    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
+@app.route('/get_today_trips')
+def get_today_trips(code_from, code_to):
+    # 1. Получаем текущую дату в формате 2026-05-05
+    today = datetime.now().strftime('%Y-%m-%d')
     current_date = datetime.now().strftime('%Y-%m-%d')
     params = {
         "apikey": RASP_API_KEY,
@@ -269,12 +341,50 @@ def get_routes(code_from, code_to):
         "format": "json",
         "lang": "ru_RU",
         "limit": 10,
-        'transport_types': 'plane,train,suburban,bus'
+        'transport_types': 'plane,train,suburban,bus',
+        'transfers': True
+    }
+
+    try:
+        response = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/', params=params)
+        data = response.json()
+
+        # Генерируем "человеческую" ссылку на сайт Яндекса для пользователя
+        # Чтобы он мог кликнуть и посмотреть расписание в браузере
+        web_link = f"https://yandex.ru{params['from']}&toId={params['to']}&date={today}"
+
+        return jsonify({
+            "status": "success",
+            "date": today,
+            "segments_count": len(data.get('segments', [])),
+            "api_url": response.url,  # Ссылка, по которой сходил ваш код
+            "web_link": web_link,  # Ссылка для браузера
+            "data": data  # Весь ответ от Яндекса
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+def get_routes(code_from, code_to):
+    if not code_from or not code_to:
+        return []
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
+    params = {
+        "apikey": RASP_API_KEY,
+        "from": code_from,
+        "to": code_to,
+        'date': current_date,
+        "system": "yandex",
+        "format": "json",
+        "lang": "ru_RU",
+        "limit": 10,
+        'transport_types': 'plane,train,suburban,bus',
+        'transfers': True
     }
     try:
         response = requests.get(url, params=params)
         data = response.json()
-        print(data)
         if 'error' in data:
             print(f"Ошибка от API: {data['error']}")
 
@@ -282,6 +392,7 @@ def get_routes(code_from, code_to):
     except Exception as e:
         print(f"Ошибка API Расписаний (search): {e}")
         return []
+
 
 
 @app.route('/register', methods=['GET', 'POST'])

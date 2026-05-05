@@ -1,8 +1,10 @@
-import os, requests
-from flask import Flask
+import os, io, csv, requests
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from datetime import *
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'travel-2026-final-key'
@@ -130,9 +132,8 @@ def get_routes(code_from, code_to):
     """Получает список всех рейсов между двумя кодами станций"""
     if not code_from or not code_to:
         return []
-
-    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
     current_date = datetime.now().strftime('%Y-%m-%d')
+    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
     params = {
         "apikey": RASP_API_KEY,
         "from": code_from,
@@ -142,12 +143,12 @@ def get_routes(code_from, code_to):
         "format": "json",
         "lang": "ru_RU",
         "limit": 10,
-        'transport_types': 'plane,train,suburban,bus'
+        'transport_types': 'plane,train,suburban,bus',
+        'transfers': True
     }
     try:
         response = requests.get(url, params=params)
         data = response.json()
-        print(data)
         if 'error' in data:
             print(f"Ошибка от API: {data['error']}")
 
@@ -156,5 +157,42 @@ def get_routes(code_from, code_to):
         print(f"Ошибка API Расписаний (search): {e}")
         return []
 
+def get_today_trips(code_from, code_to):
+    # 1. Получаем текущую дату в формате 2026-05-05
+    today = datetime.now().strftime('%Y-%m-%d')
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    # 2. Указываем коды станций
+    # ВНИМАНИЕ: Проверьте коды! s9601931 - это Москва, s9603093 - это Тверь.
+    params = {
+        "apikey": RASP_API_KEY,
+        "from": code_from,
+        "to": code_to,
+        'date': current_date,
+        "system": "yandex",
+        "format": "json",
+        "lang": "ru_RU",
+        "limit": 10,
+        'transport_types': 'plane,train,suburban,bus',
+        'transfers': True
+    }
 
-print(get_routes('s2000002', 's9601666'))
+    try:
+        response = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/', params=params)
+        data = response.json()
+
+        # Генерируем "человеческую" ссылку на сайт Яндекса для пользователя
+        # Чтобы он мог кликнуть и посмотреть расписание в браузере
+        web_link = f"https://yandex.ru{params['from']}&toId={params['to']}&date={today}"
+
+        return jsonify({
+            "status": "success",
+            "date": today,
+            "segments_count": len(data.get('segments', [])),
+            "api_url": response.url,  # Ссылка, по которой сходил ваш код
+            "web_link": web_link,  # Ссылка для браузера
+            "data": data  # Весь ответ от Яндекса
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
