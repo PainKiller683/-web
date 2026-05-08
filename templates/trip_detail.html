@@ -60,7 +60,18 @@
                         <h2 class="fw-bold mb-0">{{ weather.temp }}</h2>
                         <small class="text-capitalize">{{ weather.condition }}</small>
                     </div>
-                    <img src="https://cloudflare.com" style="width: 60px;" alt="weather">
+                    <!-- Проверьте эту строку внимательно -->
+<!--                    <img src="https://yastatic.net/weather/i/icons/funky/dark/<icon>.svg"-->
+<!--                        style="width: 64px; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.2));"-->
+<!--                        alt="{{ weather.condition }}">-->
+                    <img id="{{weather.icon}}" style="width: 64px; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.2));" alt="{{ weather.condition }}">
+                    <script>
+                        const weatherData = {{ weather|tojson }};
+                        const icon = weatherData.icon;
+                        const icon = weather.icon;
+                        const img = document.getElementById(weather.icon);
+                        img.src = `https://yastatic.net/weather/i/icons/funky/dark/{weather.icon}.svg`;
+                    </script>
                 </div>
             </div>
 

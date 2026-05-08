@@ -19,7 +19,7 @@ login_manager.login_view = 'login'
 MAPS_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 RASP_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
-WEATHER_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
+WEATHER_API_KEY = "2ec94579-9bbb-4012-81a9-cf8c4032ea93"
 BASE_URL = 'https://yandex-net.ru'
 
 class Waypoint(db.Model):
@@ -172,10 +172,11 @@ def get_city_info(city_name):
 
 
 def get_weather(lat, lon):
-    url = "https://yandex.ru"
+    url = "https://api.weather.yandex.ru/v2/forecast"
     headers = {'X-Yandex-API-Key': WEATHER_API_KEY}
     try:
-        r = requests.get(url, headers=headers, params={'lat': lat, 'lon': lon, 'lang': 'ru_RU'}).json()
+        params = {'lat': lat, 'lon': lon}
+        r = requests.get(url, headers=headers, params=params).json()
         return {
             "temp": f"{r['fact']['temp']}°",
             "condition": r['fact']['condition'],
@@ -263,7 +264,8 @@ def trip_details(trip_id):
     if info_to:
         weather = get_weather(info_to['lat'], info_to['lon'])
 
-    # 2. Рейсы Яндекс Расписаний
+    print(weather)
+
     segments = []
     if info_from and info_from.get('code') and info_to and info_to.get('code'):
         try:
@@ -282,11 +284,9 @@ def trip_details(trip_id):
     daily = trip.budget_limit // trip.days_count if trip.days_count > 0 else 0
     hotels = "Хостелы" if daily < 3000 else "Отели 3*" if daily < 7000 else "Отели 5*"
     acts = "Прогулки" if daily < 3000 else "Музеи" if daily < 7000 else "Гиды"
-
-    # Считаем траты (если у вас пока нет таблицы трат, ставим 0)
     spent = 0
     rem = trip.budget_limit - spent  # Остаток
-    prog = (spent / trip.budget_limit * 100) if trip.budget_limit > 0 else 0  # Прогресс-бар
+    prog = (spent / trip.budget_limit * 100) if trip.budget_limit > 0 else 0
 
     return render_template('trip_detail.html',
                            trip=trip,
@@ -297,9 +297,9 @@ def trip_details(trip_id):
                            segments=segments,
                            maps_key=MAPS_API_KEY,
                            coords_to=info_to,
-                           spent=spent,  # Передаем spent
-                           rem=rem,  # Передаем rem (исправляет вашу ошибку)
-                           prog=prog)  # Передаем prog
+                           spent=spent,
+                           rem=rem,
+                           prog=prog)
 
 
 @login_manager.user_loader
@@ -309,12 +309,7 @@ def load_user(user_id):
 
 @app.route('/get_today_trips')
 def get_today_trips():
-    # 1. Берем текущую дату (сегодня) в формате YYYY-MM-DD
-    # Это решает проблему пустого списка из-за старой или далекой даты
     today = datetime.now().strftime('%Y-%m-%d')
-
-    # 2. Параметры запроса (используем правильные коды станций)
-    # s9601931 - Москва (Ленинградский), s9603093 - Тверь
     params = {
         'apikey': RASP_API_KEY,
         'from': 's9601931',
@@ -325,22 +320,14 @@ def get_today_trips():
     }
 
     try:
-        # Делаем запрос к Яндексу
         response = requests.get(BASE_URL, params=params)
         data = response.json()
-
-        # 3. Обработка рейсов и создание ссылок на покупку
         results = []
-        # Проходим циклом по списку segments, который прислал Яндекс
         for segment in data.get('segments', []):
             thread_uid = segment.get('thread', {}).get('uid')
             departure_time = segment.get('departure')
             train_title = segment.get('thread', {}).get('title')
-
-            # Формируем прямую ссылку на сайт Яндекс Расписаний для этого рейса
-            # Параметр thread дает открыть конкретный поезд/электричку
             booking_url = f"https://yandex.ru{thread_uid}?date={today}"
-
             results.append({
                 'departure': departure_time,
                 'title': train_title,

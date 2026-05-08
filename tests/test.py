@@ -17,7 +17,7 @@ login_manager.login_view = 'login'
 
 MAPS_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 RASP_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
-WEATHER_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
+WEATHER_API_KEY = "2ec94579-9bbb-4012-81a9-cf8c4032ea93"
 GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 
 class Trip(db.Model):
@@ -101,7 +101,7 @@ class Trip(db.Model):
 #         print(f"Ошибка запроса: {e}")
 #         return []
 
-
+import requests
 def get_city_info(city_name):
     # 1. Получаем координаты через Геокодер
     geo_url = "https://geocode-maps.yandex.ru/v1"
@@ -196,4 +196,39 @@ def get_today_trips(code_from, code_to):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-print(get_routes('s9601931', 's9603093'))
+def get_weather(lat, lon):
+    url = "https://api.weather.yandex.ru/v2/forecast"
+    headers = {'X-Yandex-API-Key': WEATHER_API_KEY}
+    try:
+        params = {'lat': lat, 'lon': lon}
+        r = requests.get(url, headers=headers, params=params).json()
+        return {
+            "temp": f"{r['fact']['temp']}°",
+            "condition": r['fact']['condition'],
+            "icon": r['fact']['icon']
+        }
+    except:
+        return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
+
+print(get_weather(get_city_info('Москва')['lat'], get_city_info('Москва')['lon']))
+#
+# import requests
+#
+# # insert your real key here!
+# access_key = "your_key"
+#
+# headers = {
+#     "X-Yandex-Weather-Key": '2ec94579-9bbb-4012-81a9-cf8c4032ea93'
+# }
+#
+# query = """{
+#   weatherByPoint(request: { lat: 52.37125, lon: 4.89388 }) {
+#     now {
+#       temperature
+#     }
+#   }
+# }"""
+#
+# response = requests.post('https://api.weather.yandex.ru/graphql/query', headers=headers, json={'query': query})
+#
+# print(response.content)
