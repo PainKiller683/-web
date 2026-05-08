@@ -1,4 +1,4 @@
-import os, io, csv, requests, json
+import os, io, csv, requests
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -15,19 +15,17 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Ключи
+#Ключи
 MAPS_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 RASP_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 WEATHER_API_KEY = "2ec94579-9bbb-4012-81a9-cf8c4032ea93"
-BASE_URL = 'https://https://yandex.ru/'
-
+BASE_URL = 'https://yandex-net.ru'
 
 class Waypoint(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     place_name = db.Column(db.String(200))
     trip_id = db.Column(db.Integer, db.ForeignKey('trip.id'))
-
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -39,15 +37,13 @@ class User(UserMixin, db.Model):
 
 
 class Trip(db.Model):
+    waypoints = db.relationship('Waypoint', backref='trip', lazy=True)
     id = db.Column(db.Integer, primary_key=True)
     city_from = db.Column(db.String(100), nullable=False)
     city_to = db.Column(db.String(100), nullable=False)
     budget_limit = db.Column(db.Integer, default=0)
     days_count = db.Column(db.Integer, default=1)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    waypoints = db.relationship('Waypoint', backref='trip', lazy=True, cascade="all, delete-orphan")
-    budget_notes = db.relationship('BudgetNote', backref='trip', lazy=True, cascade="all, delete-orphan")
-
 
 class BudgetNote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -57,11 +53,190 @@ class BudgetNote(db.Model):
     description = db.Column(db.String(200))
 
 
+@app.route('/add_budget/<int:trip_id>', methods=['POST'])
+@login_required
+def add_budget(trip_id):
+    category = request.form.get('category')
+    try:
+        amount = float(request.form.get('amount', 0))
+    except (ValueError, TypeError):
+        amount = 0.0
+    description = request.form.get('description')
+
+    new_note = BudgetNote(trip_id=trip_id, category=category, amount=amount, description=description)
+    db.session.add(new_note)
+    db.session.commit()
+    return redirect(url_for('trip_details', trip_id=trip_id))
+
+@app.route('/trip/<int:trip_id>/action', methods=['POST'])
+@login_required
+def trip_action(trip_id):
+    amount_raw = request.form.get('amount')
+    category = request.form.get('category')
+    description = request.form.get('description')
+
+    if amount_raw:
+        try:
+            new_note = BudgetNote(
+                trip_id=trip_id,
+                amount=float(amount_raw),
+                category=category,
+                description=description
+            )
+            db.session.add(new_note)
+            db.session.commit()
+        except ValueError:
+            pass
+    return redirect(url_for('trip_details', trip_id=trip_id))
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-@app.route('/trip/<int:trip_id>')
+
+@app.route('/api/get_flights/<from_city>/<to_city>')
+@login_required
+def get_flights_api(from_city, to_city):
+    info_from = get_city_info(from_city)
+    info_to = get_city_info(to_city)
+
+    code_from = info_from['code'] if info_from else None
+    code_to = info_to['code'] if info_to else None
+
+    if not code_from or not code_to:
+        return jsonify({"segments": [], "error": "Коды станций не найдены"})
+
+    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
+    params = {
+        "apikey": RASP_API_KEY,
+        "from": code_from,
+        "to": code_to,
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "limit": 5
+    }
+    try:
+        res = requests.get(url, params=params, timeout=5).json()
+        return jsonify(res)
+    except:
+        return jsonify({"segments": []})
+
+def get_station_code(lat, lon):
+    url = "https://api.rasp.yandex-net.ru/v3.0/nearest_stations/"
+    params = {
+        "apikey": RASP_API_KEY,
+        "lat": lat,
+        "lng": lon,
+        "distance": 50,
+        "format": "json",
+        "lang": "ru_RU"
+    }
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        if data.get('stations'):
+            return data['stations'][0]['code']
+        return None
+    except Exception as e:
+        print(f"Ошибка API Расписаний (nearest): {e}")
+        return None
+
+def get_city_info(city_name):
+    geo_url = "https://geocode-maps.yandex.ru/v1"
+    params = {"apikey": GEO_API_KEY, "geocode": city_name, "format": "json"}
+    try:
+        r = requests.get(geo_url, params=params).json()
+        geo_object = r['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']
+        pos = geo_object['Point']['pos']
+        lon, lat = pos.split(' ')
+        rasp_url = "https://api.rasp.yandex-net.ru/v3.0/nearest_stations/"
+        r_rasp = requests.get(rasp_url, params={
+            "apikey": RASP_API_KEY, "lat": lat, "lng": lon, "distance": 50, "format": "json"
+        }).json()
+        station_code = None
+        if r_rasp.get('stations'):
+            station_code = r_rasp['stations'][0]['code']
+        return {"lat": float(lat), "lon": float(lon), "code": station_code}
+    except Exception as e:
+        print(f"Ошибка геокодирования города {city_name}: {e}")
+        return None
+
+
+def get_weather(lat, lon):
+    url = "https://api.weather.yandex.ru/v2/forecast"
+    headers = {'X-Yandex-API-Key': WEATHER_API_KEY}
+    try:
+        params = {'lat': lat, 'lon': lon}
+        r = requests.get(url, headers=headers, params=params).json()
+        return {
+            "temp": f"{r['fact']['temp']}°",
+            "condition": r['fact']['condition'],
+            "icon": r['fact']['icon']
+        }
+    except:
+        return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
+
+@app.route('/')
+@login_required
+def index():
+    return render_template('index.html')
+
+@app.route('/api/my_trips')
+@login_required
+def api_trips():
+    q = request.args.get('q', '').lower()
+    trips = Trip.query.filter_by(user_id=current_user.id).all()
+    if q:
+        trips = [t for t in trips if q in t.city_to.lower() or q in t.city_from.lower()]
+
+    return jsonify([{
+        "id": t.id,
+        "from": t.city_from,
+        "to": t.city_to,
+        "budget": t.budget_limit
+    } for t in trips])
+
+@app.route('/add_trip', methods=['POST'])
+@login_required
+def add_trip():
+    new_trip = Trip(
+        city_from=request.form['city_from'],
+        city_to=request.form['city_to'],
+        budget_limit=int(request.form.get('budget_limit', 0) or 0),
+        days_count=int(request.form.get('days_count', 1) or 1),
+        user_id=current_user.id
+    )
+    db.session.add(new_trip)
+    db.session.commit()
+    return redirect(url_for('trip_details', trip_id=new_trip.id))
+
+@app.route('/get_route_data')
+@login_required
+def get_route_data():
+    city_from = request.args.get('from')
+    city_to = request.args.get('to')
+
+    data_from = get_city_info(city_from)
+    data_to = get_city_info(city_to)
+
+    if data_from and data_to:
+        return jsonify({
+            "start": {"lat": data_from['lat'], "lon": data_from['lon']},
+            "end": {"lat": data_to['lat'], "lon": data_to['lon']}
+        })
+    return jsonify({"error": "not found"}), 404
+
+@app.route('/delete_trip/<int:trip_id>', methods=['POST'])
+@login_required
+def delete_trip(trip_id):
+    trip = Trip.query.filter_by(id=trip_id, user_id=current_user.id).first_or_404()
+    budget = BudgetNote.query.filter_by(id=trip_id).first_or_404()
+    db.session.delete(trip)
+    db.session.delete(budget)
+    db.session.commit()
+    return redirect(url_for('index'))
+
+@app.route('/trip/<int:trip_id')
 @login_required
 def trip_details(trip_id):
     trip = Trip.query.get_or_404(trip_id)
@@ -105,185 +280,6 @@ def trip_details(trip_id):
                            spent=spent,
                            rem=rem,
                            prog=prog)
-
-@app.route('/')
-@login_required
-def index():
-    return render_template('index.html')
-
-@app.route('/api/my_trips')
-@login_required
-def api_trips():
-    q = request.args.get('q', '').lower()
-    trips = Trip.query.filter_by(user_id=current_user.id).all()
-    if q:
-        trips = [t for t in trips if q in t.city_to.lower() or q in t.city_from.lower()]
-
-    return jsonify([{
-        "id": t.id,
-        "from": t.city_from,
-        "to": t.city_to,
-        "budget": t.budget_limit
-    } for t in trips])
-def get_weather(lat, lon):
-    url = "https://api.weather.yandex.ru/v2/forecast"
-    headers = {'X-Yandex-API-Key': WEATHER_API_KEY}
-    try:
-        params = {'lat': lat, 'lon': lon}
-        r = requests.get(url, headers=headers, params=params).json()
-        return {
-            "temp": f"{r['fact']['temp']}°",
-            "condition": r['fact']['condition'],
-            "icon": r['fact']['icon']
-        }
-    except:
-        return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
-
-@app.route('/add_budget/<int:trip_id>')
-@login_required
-def add_budget(trip_id):
-    category = request.form.get('category') or request.form.get('cat')
-    try:
-        amount = float(request.form.get('amount', 0))
-    except:
-        amount = 0.0
-    description = request.form.get('description') or request.form.get('desc')
-
-    new_note = BudgetNote(trip_id=trip_id, category=category, amount=amount, description=description)
-    db.session.add(new_note)
-    db.session.commit()
-    return redirect(url_for('trip_details', trip_id=trip_id))
-
-@app.route('/add_trip', methods=['POST'])
-@login_required
-def add_trip():
-    new_trip = Trip(
-        city_from=request.form['city_from'],
-        city_to=request.form['city_to'],
-        budget_limit=int(request.form.get('budget_limit', 0) or 0),
-        days_count=int(request.form.get('days_count', 1) or 1),
-        user_id=current_user.id
-    )
-    db.session.add(new_trip)
-    db.session.commit()
-    return redirect(url_for('trip_details', trip_id=new_trip.id))
-
-@app.route('/delete_trip/<int:trip_id>', methods=['POST'])
-@login_required
-def delete_trip(trip_id):
-    trip = Trip.query.filter_by(id=trip_id, user_id=current_user.id).first_or_404()
-    budget = BudgetNote.query.filter_by(id=trip_id).first_or_404()
-    db.session.delete(trip)
-    db.session.delete(budget)
-    db.session.commit()
-    return redirect(url_for('index'))
-
-@app.route('/get_route_data')
-@login_required
-def get_route_data():
-    city_from = request.args.get('from')
-    city_to = request.args.get('to')
-
-    data_from = get_city_info(city_from)
-    data_to = get_city_info(city_to)
-
-    if data_from and data_to:
-        return jsonify({
-            "start": {"lat": data_from['lat'], "lon": data_from['lon']},
-            "end": {"lat": data_to['lat'], "lon": data_to['lon']}
-        })
-    return jsonify({"error": "not found"}), 404
-
-def get_city_info(city_name):
-    geo_url = "https://geocode-maps.yandex.ru/v1"
-    params = {"apikey": GEO_API_KEY, "geocode": city_name, "format": "json"}
-    try:
-        r = requests.get(geo_url, params=params).json()
-        geo_object = r['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']
-        pos = geo_object['Point']['pos']
-        lon, lat = pos.split(' ')
-        rasp_url = "https://api.rasp.yandex-net.ru/v3.0/nearest_stations/"
-        r_rasp = requests.get(rasp_url, params={
-            "apikey": RASP_API_KEY, "lat": lat, "lng": lon, "distance": 50, "format": "json"
-        }).json()
-        station_code = None
-        if r_rasp.get('stations'):
-            station_code = r_rasp['stations'][0]['code']
-        return {"lat": float(lat), "lon": float(lon), "code": station_code}
-    except Exception as e:
-        print(f"Ошибка геокодирования города {city_name}: {e}")
-        return None
-def get_station_code(lat, lon):
-    url = "https://api.rasp.yandex-net.ru/v3.0/nearest_stations/"
-    params = {
-        "apikey": RASP_API_KEY,
-        "lat": lat,
-        "lng": lon,
-        "distance": 50,
-        "format": "json",
-        "lang": "ru_RU"
-    }
-    try:
-        response = requests.get(url, params=params)
-        data = response.json()
-        if data.get('stations'):
-            return data['stations'][0]['code']
-        return None
-    except Exception as e:
-        print(f"Ошибка API Расписаний (nearest): {e}")
-        return None
-
-@app.route('/api/get_flights/<from_city>/<to_city>')
-@login_required
-def get_flights_api(from_city, to_city):
-    info_from = get_city_info(from_city)
-    info_to = get_city_info(to_city)
-
-    code_from = info_from['code'] if info_from else None
-    code_to = info_to['code'] if info_to else None
-
-    if not code_from or not code_to:
-        return jsonify({"segments": [], "error": "Коды станций не найдены"})
-
-    url = "https://api.rasp.yandex-net.ru/v3.0/search/"
-    params = {
-        "apikey": RASP_API_KEY,
-        "from": code_from,
-        "to": code_to,
-        "date": datetime.now().strftime('%Y-%m-%d'),
-        "limit": 5
-    }
-    try:
-        res = requests.get(url, params=params, timeout=5).json()
-        return jsonify(res)
-    except:
-        return jsonify({"segments": []})
-
-@app.route('/trip/<int:trip_id>/action', methods=['POST'])
-@login_required
-def trip_action(trip_id):
-    amount_raw = request.form.get('amount')
-    category = request.form.get('category')
-    description = request.form.get('description')
-
-    if amount_raw:
-        try:
-            new_note = BudgetNote(
-                trip_id=trip_id,
-                amount=float(amount_raw),
-                category=category,
-                description=description
-            )
-            db.session.add(new_note)
-            db.session.commit()
-        except ValueError:
-            pass
-    return redirect(url_for('trip_details', trip_id=trip_id))
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return db.session.get(User, int(user_id))
 
 
 @login_manager.user_loader
@@ -392,6 +388,8 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
+
+
 @app.route('/export')
 @login_required
 def export_csv():
@@ -420,6 +418,8 @@ def import_csv():
                                     days_count=int(row[3]), user_id=current_user.id))
         db.session.commit()
     return redirect(url_for('index'))
+
+
 
 
 if __name__ == '__main__':

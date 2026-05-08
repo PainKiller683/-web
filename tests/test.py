@@ -129,7 +129,6 @@ def get_city_info(city_name):
 
 
 def get_routes(code_from, code_to):
-    """Получает список всех рейсов между двумя кодами станций"""
     if not code_from or not code_to:
         return []
     current_date = datetime.now().strftime('%Y-%m-%d')
@@ -157,17 +156,14 @@ def get_routes(code_from, code_to):
         print(f"Ошибка API Расписаний (search): {e}")
         return []
 
+
 def get_today_trips(code_from, code_to):
-    # 1. Получаем текущую дату в формате 2026-05-05
     today = datetime.now().strftime('%Y-%m-%d')
-    current_date = datetime.now().strftime('%Y-%m-%d')
-    # 2. Указываем коды станций
-    # ВНИМАНИЕ: Проверьте коды! s9601931 - это Москва, s9603093 - это Тверь.
     params = {
         "apikey": RASP_API_KEY,
         "from": code_from,
         "to": code_to,
-        'date': current_date,
+        'date': today,
         "system": "yandex",
         "format": "json",
         "lang": "ru_RU",
@@ -175,22 +171,20 @@ def get_today_trips(code_from, code_to):
         'transport_types': 'plane,train,suburban,bus',
         'transfers': True
     }
-
     try:
         response = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/', params=params)
         data = response.json()
+        web_link = (f"http://rasp.yandex.ru/search/?fromId=c213&fromName={'Москва'}&toId=c239&toName=Сочи&when=сегодня")
 
-        # Генерируем "человеческую" ссылку на сайт Яндекса для пользователя
-        # Чтобы он мог кликнуть и посмотреть расписание в браузере
-        web_link = f"https://yandex.ru{params['from']}&toId={params['to']}&date={today}"
+        print(f"Поиск рейсов: {web_link}")
 
         return jsonify({
             "status": "success",
             "date": today,
             "segments_count": len(data.get('segments', [])),
-            "api_url": response.url,  # Ссылка, по которой сходил ваш код
-            "web_link": web_link,  # Ссылка для браузера
-            "data": data  # Весь ответ от Яндекса
+            "api_url": response.url,
+            "web_link": web_link,
+            "data": data
         })
 
     except Exception as e:
@@ -210,7 +204,7 @@ def get_weather(lat, lon):
     except:
         return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
 
-print(get_weather(get_city_info('Москва')['lat'], get_city_info('Москва')['lon']))
+print(get_today_trips('s9600366', 's9600213'))
 #
 # import requests
 #
