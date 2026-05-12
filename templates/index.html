@@ -9,7 +9,6 @@
     .trip-item { border-bottom: 1px solid #eee; padding: 12px 0; }
     .trip-item:last-child { border-bottom: none; }
 </style>
-
 <div class="row mb-4">
     <div class="col-12 ya-card p-3 d-flex align-items-center">
         <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}"
@@ -18,7 +17,6 @@
             <p class="text-muted mb-0 small">{{ current_user.bio }}</p></div>
     </div>
 </div>
-
 <div class="row">
     <div class="col-md-4">
         <div class="ya-card p-4 mb-3">
@@ -30,7 +28,6 @@
                 <input type="number" name="days_count" class="form-control mb-3" placeholder="Дней">
                 <button class="btn btn-ya w-100 py-2">Создать маршрут</button>
             </form>
-
             <div class="ya-card p-3 mt-3 shadow-sm border-dashed" style="border: 2px dashed #ddd; background: #fafafa;">
                 <h6 class="small fw-bold text-uppercase text-muted mb-3"><i class="bi bi-file-earmark-arrow-up"></i>
                     Работа с данными</h6>
@@ -47,9 +44,7 @@
             </div>
         </div>
     </div>
-
     <div class="col-md-8">
-        <!-- БЛОК РАСПИСАНИЯ ЯНДЕКСА -->
         {% if trips %}
         <div class="ya-card p-4 mb-4">
             <h5 class="fw-bold mb-3"><i class="bi bi-train-front"></i> Ближайшие рейсы на сегодня</h5>
@@ -66,13 +61,11 @@
             </div>
         </div>
         {% endif %}
-
         <input type="text" id="search" class="form-control mb-4 shadow-sm py-2" style="border-radius:12px"
                placeholder="Поиск по городу назначения...">
         <div id="list" class="row"></div>
     </div>
 </div>
-
 <script>
     const s = document.getElementById('search'), l = document.getElementById('list');
     const update = async () => {

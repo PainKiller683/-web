@@ -61,6 +61,7 @@ class BudgetNote(db.Model):
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
+
 @app.route('/trip/<int:trip_id>')
 @login_required
 def trip_details(trip_id):
@@ -70,7 +71,6 @@ def trip_details(trip_id):
     weather = {"temp": "??", "condition": "нет данных", "icon": "ovc"}
     if info_to:
         weather = get_weather(info_to['lat'], info_to['lon'])
-    print(weather)
     segments = []
     if info_from and info_from.get('code') and info_to and info_to.get('code'):
         try:
@@ -85,14 +85,12 @@ def trip_details(trip_id):
         except:
             segments = []
 
-    # 3. Расчет бюджета (исправляем ошибку UndefinedError)
     daily = trip.budget_limit // trip.days_count if trip.days_count > 0 else 0
     hotels = "Хостелы" if daily < 3000 else "Отели 3*" if daily < 7000 else "Отели 5*"
     acts = "Прогулки" if daily < 3000 else "Музеи" if daily < 7000 else "Гиды"
     spent = 0
-    rem = trip.budget_limit - spent  # Остаток
+    rem = trip.budget_limit - spent
     prog = (spent / trip.budget_limit * 100) if trip.budget_limit > 0 else 0
-
     return render_template('trip_detail.html',
                            trip=trip,
                            daily=daily,
@@ -106,10 +104,12 @@ def trip_details(trip_id):
                            rem=rem,
                            prog=prog)
 
+
 @app.route('/')
 @login_required
 def index():
     return render_template('index.html')
+
 
 @app.route('/api/my_trips')
 @login_required
@@ -125,6 +125,8 @@ def api_trips():
         "to": t.city_to,
         "budget": t.budget_limit
     } for t in trips])
+
+
 def get_weather(lat, lon):
     url = "https://api.weather.yandex.ru/v2/forecast"
     headers = {'X-Yandex-API-Key': WEATHER_API_KEY}
@@ -139,20 +141,42 @@ def get_weather(lat, lon):
     except:
         return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
 
-@app.route('/add_budget/<int:trip_id>')
+
+@app.route('/add_budget/<int:trip_id>', methods=['POST'])
 @login_required
 def add_budget(trip_id):
     category = request.form.get('category') or request.form.get('cat')
     try:
         amount = float(request.form.get('amount', 0))
-    except:
+    except (ValueError, TypeError):
         amount = 0.0
     description = request.form.get('description') or request.form.get('desc')
-
-    new_note = BudgetNote(trip_id=trip_id, category=category, amount=amount, description=description)
-    db.session.add(new_note)
-    db.session.commit()
+    trip = Trip.query.get_or_404(trip_id)
+    trip.budget_limit -= amount
+    new_note = BudgetNote(
+        trip_id=trip_id,
+        category=category,
+        amount=amount,
+        description=description
+    )
+    try:
+        db.session.add(new_note)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return f"Ошибка при обновлении базы: {e}", 500
     return redirect(url_for('trip_details', trip_id=trip_id))
+
+@app.route('/add_waypoint/<int:trip_id>', methods=['POST'])
+@login_required
+def add_waypoint(trip_id):
+    place_name = request.form.get('place_name')
+    if place_name:
+        new_point = Waypoint(place_name=place_name, trip_id=trip_id)
+        db.session.add(new_point)
+        db.session.commit()
+    return redirect(url_for('trip_details', trip_id=trip_id))
+
 
 @app.route('/add_trip', methods=['POST'])
 @login_required
@@ -168,6 +192,7 @@ def add_trip():
     db.session.commit()
     return redirect(url_for('trip_details', trip_id=new_trip.id))
 
+
 @app.route('/delete_trip/<int:trip_id>', methods=['POST'])
 @login_required
 def delete_trip(trip_id):
@@ -177,6 +202,7 @@ def delete_trip(trip_id):
     db.session.delete(budget)
     db.session.commit()
     return redirect(url_for('index'))
+
 
 @app.route('/get_route_data')
 @login_required
@@ -193,6 +219,7 @@ def get_route_data():
             "end": {"lat": data_to['lat'], "lon": data_to['lon']}
         })
     return jsonify({"error": "not found"}), 404
+
 
 def get_city_info(city_name):
     geo_url = "https://geocode-maps.yandex.ru/v1"
@@ -213,6 +240,8 @@ def get_city_info(city_name):
     except Exception as e:
         print(f"Ошибка геокодирования города {city_name}: {e}")
         return None
+
+
 def get_station_code(lat, lon):
     url = "https://api.rasp.yandex-net.ru/v3.0/nearest_stations/"
     params = {
@@ -232,6 +261,7 @@ def get_station_code(lat, lon):
     except Exception as e:
         print(f"Ошибка API Расписаний (nearest): {e}")
         return None
+
 
 @app.route('/api/get_flights/<from_city>/<to_city>')
 @login_required
@@ -258,6 +288,7 @@ def get_flights_api(from_city, to_city):
         return jsonify(res)
     except:
         return jsonify({"segments": []})
+
 
 @app.route('/trip/<int:trip_id>/action', methods=['POST'])
 @login_required
@@ -317,8 +348,6 @@ def get_today_trips():
                 'title': train_title,
                 'buy_link': booking_url
             })
-
-        # 4. Возвращаем результат
         return jsonify({
             'date': today,
             'from_station': data.get('search', {}).get('from', {}).get('title'),
@@ -328,6 +357,7 @@ def get_today_trips():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 def get_routes(code_from, code_to):
     if not code_from or not code_to:
@@ -356,7 +386,6 @@ def get_routes(code_from, code_to):
     except Exception as e:
         print(f"Ошибка API Расписаний (search): {e}")
         return []
-
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -391,6 +420,7 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
 
 @app.route('/export')
 @login_required
