@@ -34,10 +34,9 @@
                     {% endfor %}
                 </div>
                 <h5 class="fw-bold"><i class="bi bi-geo-alt me-2"></i>План (Waypoints)</h5>
-                <form action="/trip/{{ trip.id }}/action" method="POST" class="d-flex mb-3 mt-2">
-                    <input type="hidden" name="type" value="waypoint">
-                    <input type="text" name="place" class="form-control form-control-sm me-2" placeholder="Напр: Эйфелева башня" required>
-                    <button class="btn btn-sm btn-primary px-3">Добавить</button>
+                <form action="/add_waypoint/{{ trip.id }}" method="POST" class="d-flex mb-3 mt-2">
+                    <input type="text" name="place_name" class="form-control form-control-sm me-2" placeholder="Напр: Эйфелева башня" required>
+                    <button type="submit" class="btn btn-sm btn-primary px-3">Добавить</button>
                 </form>
                 <ul class="list-group list-group-flush">
                     {% for w in trip.waypoints %}
@@ -135,22 +134,40 @@
     </div>
 </div>
 <script src="https://api-maps.yandex.ru/2.1/?apikey=2c06abb3-fcf6-43d9-8edb-0d29f415b1e3&lang=ru_RU" type="text/javascript"> </script>
-<script type="text/javascript">
+<script>
     ymaps.ready(function () {
-        var myMap = new ymaps.Map("map", {
-            center: [55.75, 37.62],
+        // 1. Создаем карту, центрированную на финальной точке
+        const myMap = new ymaps.Map('map', {
+            center: [{{ coords_to.lat if coords_to else 55.75 }}, {{ coords_to.lon if coords_to else 37.62 }}],
             zoom: 7,
             controls: ['zoomControl']
         });
 
-        var multiRoute = new ymaps.multiRouter.MultiRoute({
-            referencePoints: ["{{ trip.city_from }}", "{{ trip.city_to }}"],
-            params: { routingMode: 'auto' }
+        // 2. Формируем массив всех точек маршрута
+        // Старт -> Все промежуточные -> Финиш
+        const routePoints = [
+            "{{ trip.city_from }}",
+            {% for w in trip.waypoints %}
+                "{{ w.place_name }}",
+            {% endfor %}
+            "{{ trip.city_to }}"
+        ];
+
+        // 3. Создаем мультимаршрут
+        const multiRoute = new ymaps.multiRouter.MultiRoute({
+            referencePoints: routePoints,
+            params: {
+                routingMode: 'auto' // 'auto' для машины, можно 'masstransit' для транспорта
+            }
         }, {
+            // Автоматически устанавливать границы карты, чтобы весь маршрут был виден
             boundsAutoApply: true,
-            routeActiveStrokeColor: "#fc0",
-            routeActiveStrokeWidth: 5
+            // Цвет и стиль линии маршрута
+            routeActiveStrokeWidth: 4,
+            routeActiveStrokeColor: "#00b4db"
         });
+
+        // 4. Добавляем маршрут на карту
         myMap.geoObjects.add(multiRoute);
     });
 </script>

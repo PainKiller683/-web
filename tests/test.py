@@ -120,7 +120,7 @@ def get_city_info(city_name):
 
         station_code = None
         if r_rasp.get('stations'):
-            station_code = r_rasp['stations'][0]['code']  # Берем самую ближайшую
+            station_code = r_rasp['stations'][0]['code']
 
         return {"lat": float(lat), "lon": float(lon), "code": station_code}
     except Exception as e:
@@ -148,6 +148,15 @@ def get_routes(code_from, code_to):
     try:
         response = requests.get(url, params=params)
         data = response.json()
+        segments = data.get('segments', [])
+        for s in segments:
+            uid = s.get('thread', {}).get('uid')
+            date = s.get('start_date')
+            if uid and date:
+                s['thread_url'] = f"https://rasp.yandex.ru/?uid={uid}/?date={date}"
+                print(f"ПРОВЕРКА ССЫЛКИ: {s['thread_url']}")
+            else:
+                s['thread_url'] = "#"
         if 'error' in data:
             print(f"Ошибка от API: {data['error']}")
 
@@ -157,54 +166,40 @@ def get_routes(code_from, code_to):
         return []
 
 
-def get_today_trips(code_from, code_to):
-    today = datetime.now().strftime('%Y-%m-%d')
-    params = {
-        "apikey": RASP_API_KEY,
-        "from": code_from,
-        "to": code_to,
-        'date': today,
-        "system": "yandex",
-        "format": "json",
-        "lang": "ru_RU",
-        "limit": 10,
-        'transport_types': 'plane,train,suburban,bus',
-        'transfers': True
-    }
-    try:
-        response = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/', params=params)
-        data = response.json()
-        web_link = (f"http://rasp.yandex.ru/search/?fromId=c213&fromName={'Москва'}&toId=c239&toName=Сочи&when=сегодня")
+# def get_today_trips(code_from, code_to):
+#     today = datetime.now().strftime('%Y-%m-%d')
+#     params = {
+#         "apikey": RASP_API_KEY,
+#         "from": code_from,
+#         "to": code_to,
+#         'date': today,
+#         "system": "yandex",
+#         "format": "json",
+#         "lang": "ru_RU",
+#         "limit": 10,
+#         'transport_types': 'plane,train,suburban,bus',
+#         'transfers': True
+#     }
+#     try:
+#         response = requests.get('https://api.rasp.yandex-net.ru/v3.0/search/', params=params)
+#         data = response.json()
+#         web_link = (f"http://rasp.yandex.ru/search/?fromId=c213&fromName={'Москва'}&toId=c239&toName=Сочи&when=сегодня")
+#
+#         print(f"Поиск рейсов: {web_link}")
+#
+#         return jsonify({
+#             "status": "success",
+#             "date": today,
+#             "segments_count": len(data.get('segments', [])),
+#             "api_url": response.url,
+#             "web_link": web_link,
+#             "data": data
+#         })
+#
+#     except Exception as e:
+#         return jsonify({"status": "error", "message": str(e)})
 
-        print(f"Поиск рейсов: {web_link}")
-
-        return jsonify({
-            "status": "success",
-            "date": today,
-            "segments_count": len(data.get('segments', [])),
-            "api_url": response.url,
-            "web_link": web_link,
-            "data": data
-        })
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
-def get_weather(lat, lon):
-    url = "https://api.weather.yandex.ru/v2/forecast"
-    headers = {'X-Yandex-API-Key': WEATHER_API_KEY}
-    try:
-        params = {'lat': lat, 'lon': lon}
-        r = requests.get(url, headers=headers, params=params).json()
-        return {
-            "temp": f"{r['fact']['temp']}°",
-            "condition": r['fact']['condition'],
-            "icon": r['fact']['icon']
-        }
-    except:
-        return {"temp": "??", "condition": "нет данных", "icon": "ovc"}
-
-print(get_today_trips('s9600366', 's9600213'))
+print(get_routes('s9600366', 's9600213'))
 #
 # import requests
 #

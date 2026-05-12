@@ -74,17 +74,27 @@ def trip_details(trip_id):
     segments = []
     if info_from and info_from.get('code') and info_to and info_to.get('code'):
         try:
-            r_url = "https://api.rasp.yandex-net.ru/v3.0/schedule/"
-            res = requests.get(r_url, params={
+            res = get_routes(info_from['code'], info_to['code'])
+            segments = res.get('segments', [])
+            params = {
                 "apikey": RASP_API_KEY,
                 "from": info_from['code'],
                 "to": info_to['code'],
-                "date": datetime.now().strftime('%Y-%m-%d')
-            }).json()
-            segments = res.get('segments', [])
+                "format": "json",
+                "date": datetime.now().strftime('%Y-%m-%d'),
+                "system": "yandex"
+            }
+            for s in segments:
+                uid = s.get('thread', {}).get('uid')
+                date = s.get('start_date')
+
+                if uid and date:
+                    s['thread_url'] = f"https://yandex.ru{uid}?date={date}"
+                    print(f"ПРОВЕРКА ССЫЛКИ: {s['thread_url']}")
+                else:
+                    s['thread_url'] = "#"
         except:
             segments = []
-
     daily = trip.budget_limit // trip.days_count if trip.days_count > 0 else 0
     hotels = "Хостелы" if daily < 3000 else "Отели 3*" if daily < 7000 else "Отели 5*"
     acts = "Прогулки" if daily < 3000 else "Музеи" if daily < 7000 else "Гиды"
@@ -197,11 +207,23 @@ def add_trip():
 @login_required
 def delete_trip(trip_id):
     trip = Trip.query.filter_by(id=trip_id, user_id=current_user.id).first_or_404()
-    budget = BudgetNote.query.filter_by(id=trip_id).first_or_404()
-    db.session.delete(trip)
-    db.session.delete(budget)
-    db.session.commit()
+    try:
+        db.session.delete(trip)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return f"Ошибка при удалении: {e}", 500
+
     return redirect(url_for('index'))
+
+@app.route('/delete_waypoint/<int:waypoint_id>')
+@login_required
+def delete_waypoint(waypoint_id):
+    waypoint = Waypoint.query.get_or_404(waypoint_id)
+    trip_id = waypoint.trip_id
+    db.session.delete(waypoint)
+    db.session.commit()
+    return redirect(url_for('trip_details', trip_id=trip_id))
 
 
 @app.route('/get_route_data')

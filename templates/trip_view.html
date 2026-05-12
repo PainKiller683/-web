@@ -27,15 +27,30 @@
                 <div class="mt-4">
                     <h5 class="fw-bold mb-3">Рейсы на сегодня</h5>
                     {% for s in segments %}
-                    <div class="d-flex justify-content-between align-items-center py-3 border-bottom">
-                        <div>
-                            <div class="fw-bold text-dark">{{ s.thread.title }}</div>
-                            <small class="text-muted">{{ s.departure[11:16] }} • {{ s.thread.transport_type_title }}</small>
-                        </div>
-                        <a href="https://yandex.net" target="_blank" class="btn btn-ya btn-sm">Билеты</a>
-                    </div>
+                        <a href="https://yandex.ru{{ s.thread.uid }}?departure_at={{ s.departure[:10] }}"
+                            target="_blank"
+                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-2 border-start-0 border-end-0"
+                            style="text-decoration: none; transition: background 0.2s;">
+
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-light text-dark border me-2">{{ s.thread.transport_type[:1] | upper }}</span>
+                                <div>
+                                    <strong class="text-dark d-block">{{ s.thread.title }}</strong>
+                                    <div class="text-muted" style="font-size: 0.75rem;">
+                                        Отпр: <span class="text-primary fw-bold">{{ s.departure[11:16] }}</span>
+                                        из {{ s.departure_from.short_title or 'Вокзала' }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle">
+                                {{ (s.duration / 3600) | round(1) }} ч.
+                                </span>
+                                <div class="text-muted mt-1" style="font-size: 0.65rem;">Купить <i class="bi bi-box-arrow-up-right"></i></div>
+                            </div>
+                        </a>
                     {% else %}
-                    <p class="text-muted small py-2">Прямых рейсов не найдено.</p>
+                        <p class="text-muted small p-3">Рейсы на сегодня не найдены.</p>
                     {% endfor %}
                 </div>
             </div>
