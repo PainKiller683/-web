@@ -20,7 +20,6 @@ MAPS_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 GEO_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 RASP_API_KEY = "2c06abb3-fcf6-43d9-8edb-0d29f415b1e3"
 WEATHER_API_KEY = "2ec94579-9bbb-4012-81a9-cf8c4032ea93"
-BASE_URL = 'https://https://yandex.ru/'
 
 
 class Waypoint(db.Model):
